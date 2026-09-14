@@ -1,6 +1,10 @@
 {
   "name": "lyric-player",
+<<<<<<< HEAD
   "version": "0.7.2",
+=======
+  "version": "0.7.3",
+>>>>>>> 55ae239b (Update App version)
   "private": true,
   "type": "module",
   "scripts": {
@@ -61,6 +65,7 @@
     "@vitejs/plugin-react": "^6.0.3",
     "electron": "44.3.0",
     "electron-builder": "26.15.3",
+    "install-electron": "^1.0.0",
     "playwright": "^1.58.2",
     "sass": "^1.101.3",
     "typescript": "^5.9.3",
