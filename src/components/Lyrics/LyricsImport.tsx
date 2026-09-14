@@ -38,7 +38,7 @@ export function LyricsImport({ trackId, trackName, onClose, onSaved, initialFile
       onDragOver={event => { event.preventDefault(); event.stopPropagation(); }}
       onDrop={event => { event.preventDefault(); event.stopPropagation(); if (!busy) void select([...event.dataTransfer.files]); }}>
       <p>{t("For")}<strong>{trackName}</strong></p>
-      <label className='lyrics-file-picker'>{t("Choose a TTML or LRC file")}<input type='file' accept='.ttml,.lrc' aria-label={t("Choose lyric file")} disabled={!!busy}
+      <label className='lyrics-file-picker'>{t("Choose a TTML or LRC file")}<input type='file' accept='.ttml,.amll,.lrc' aria-label={t("Choose lyric file")} disabled={!!busy}
           onChange={event => { if (event.target.files?.length) void select([...event.target.files]); event.target.value = ''; }} />
         <small>{t("Or drop one file here. Saved only with this track, on this device.")}</small>
       </label>
