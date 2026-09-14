@@ -8,6 +8,20 @@
 
 界面与部分交互设计参考 Spotify，但项目本身不接入 Spotify 在线曲库、Web API 或 Playback SDK。
 
+# 展示图 **（字体因版权问题不会放出来）**
+## 歌词界面
+<img width="2560" height="1440" alt="image" src="https://github.com/user-attachments/assets/fd083b81-5bd3-4bed-be3e-01bf61b7fae2" />
+<img width="2560" height="1392" alt="image" src="https://github.com/user-attachments/assets/8e966030-55a6-48bf-b705-df39d42180f7" />
+
+## 主界面
+<img width="2560" height="1392" alt="image" src="https://github.com/user-attachments/assets/d55fea4c-8427-4e8d-882e-11dd2a809534" />
+<img width="2560" height="1392" alt="image" src="https://github.com/user-attachments/assets/f82329b3-3241-469e-bee5-e30e0906a0c8" />
+<img width="2560" height="1392" alt="image" src="https://github.com/user-attachments/assets/f89bce1a-f10f-4a8d-a31d-410e39ab688a" />
+
+## Analyze界面
+<img width="2560" height="1392" alt="image" src="https://github.com/user-attachments/assets/07422973-3bf4-492f-a922-238edff7952c" />
+<img width="2560" height="1392" alt="image" src="https://github.com/user-attachments/assets/de77a035-679c-4d75-9de4-62ae80cbd778" />
+
 ## Features
 
 ### Local Music
