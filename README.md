@@ -1,90 +1,173 @@
 # Lyric Player
 
-本项目是一个离线优先的本地音乐播放器与歌词管理应用，基于 React + Vite + Redux 构建，支持 Web 运行和 Electron 打包运行，核心目标是统一“导入本地音乐 -> 导入/编辑歌词 -> 分析 -> 播放管理”的闭环。
+一个**离线优先的本地音乐播放器与歌词管理工具**，基于 React + Vite + Redux Toolkit 构建，支持 Web 运行和 Electron Windows 桌面端。
 
-## 主要功能与特色
+项目主要围绕：
 
-### 1) 本地音乐库与导入
-- 支持手动选择音乐文件导入。
-- 支持自动文件夹导入（桌面端和浏览器目录选择器两种模式），可持续监听新增文件并入库。
-- 使用 IndexedDB 缓存导入记录与音频副本，提升下次启动恢复速度。
-- 支持封面、艺术家/专辑/流派/技术元数据展示与持久化。
-- 播放、队列、专辑分组、排序、搜索、歌单等基础管理能力均有内置状态管理。
+**本地音乐导入 → 歌词导入 / 编辑 → Lyric Studio 打轴 → 音频 / 歌词分析 → 本地播放**
 
-### 2) 歌词工作流（Lyrics）
-- 支持本地歌词文件导入（TTML/LRC）。
-- 支持逐行显示、偏移校准、字体与显示样式设置、全屏阅读。
-- 支持从当前播放曲目快速跳转到 Lyric Studio 继续编辑。
-- 歌词显示与播放器状态联动，并保留当前曲目下的歌词偏移与外观配置。
+界面与部分交互设计参考 Spotify，但项目本身不接入 Spotify 在线曲库、Web API 或 Playback SDK。
 
-### 3) Lyric Studio
-- 提供独立的逐字/逐行编辑工作台入口（`/studio`）。
-- 支持从分析结果回流、打开历史会话、基于歌曲 ID 加载/恢复上一会话。
-- 与页面路由联动，支持对当前库内歌曲进行歌词编辑与后续查看。
+## Features
 
-### 4) 音频与歌词分析
-- 提供 `/analyze/:trackId` 分析页，可在单曲层面查看：
-  - 歌词智能分析数据（基于 DeepSeek 配置）
-  - 音频分析
-  - 响度（ReplayGain/Loudness）分析
-- 支持语言/模型参数切换与分析来源选择。
-- 分析结果与源输入可追踪、可刷新、可回退到可复现状态。
+### Local Music
 
-### 5) 用户体验与主题
-- 支持明暗主题切换和界面配置持久化。
-- 支持播放器偏好（音量/顺序/重复/队列）恢复。
-- 支持桌面端窗口配置（zoom/theme）与字体设置。
+* 导入本地音乐文件
+* 支持 MP3、FLAC、WAV、M4A、AAC、OGG、Opus、AIFF、WebM 等格式
+* 文件夹递归导入
+* 自动读取歌曲标签与封面
+* 本地搜索、排序、专辑分组
+* 播放队列、随机播放、循环播放
+* 使用 IndexedDB 保存音乐副本与曲库数据
 
-### 6) 工程能力与发布
-- 有完整的启动/构建脚本：`dev`, `build`, `preview`, `desktop:dev`, `desktop:build`。
-- 覆盖大量测试脚本（库、离线、studio、analysis、desktop、界面测试等）。
-- 桌面模式通过 `electron` 与 `electron-builder` 打包。
+### Lyrics
 
-## 代码架构（可见亮点）
-- 入口初始化：`src/index.tsx`（初始化库恢复、目录导入、主题、语言、DeepSeek 配置、播放器运行时）
-- 应用壳：`src/App.tsx`
-  - 路由：`/`、`/collection/*`、`/lyrics`、`/analyze/:trackId`、`/studio`
-  - 全局状态：Redux + Ant Design 主题配置
-- 业务核心
-  - 曲库与导入：`src/library/*`
-  - 播放器运行时：`src/player/*`
-  - 歌词：`src/lyrics/*`、`src/pages/Lyrics`
-  - Studio 编辑：`src/pages/Studio`、`src/components/Studio/*`
-  - 分析：`src/pages/Analyze`、`src/analysis/*`
-- 存储与设置：`src/library/database.ts`、`src/theme/*`、`src/store/*`
+* 支持 LRC / TTML
+* 支持读取部分音频内嵌歌词
+* 歌词同步滚动
+* 时间偏移调整
+* 全屏歌词
+* 字体、字号和行距设置
 
-## 依赖与许可说明
-- 仓库主许可：`LICENSE`（MIT）
-- 核心第三方能力来源与许可证
-  - `essentia.js@0.1.3`（AGPL-3.0）
-  - `@applemusic-like-lyrics/ttml@1.0.1`（TTML 相关）
-  - `React`、`Redux`、`Ant Design`、`electron` 等按其官方授权
-- 相关许可证文件可在仓库内 `public/licenses` 和 `build/licenses` 查看。
+### Lyric Studio
 
-## 运行方式
+独立歌词制作页面：
 
-- 本地开发（网页）
+```text
+/studio
+```
+
+支持：
+
+* 粘贴歌词
+* 导入 LRC / TTML
+* 逐行打轴
+* 逐字打轴
+* Undo / Redo
+* 时间轴整体或局部偏移
+* 当前行试听与循环
+* TTML 实时预览
+* 导出 LRC / TTML
+* 保存和恢复 Studio 工程
+
+同时支持将歌词写入应用保存的 **MP3 / FLAC / WAV 音频副本**，不会修改最初导入的原始文件。
+
+### Analyze
+
+单曲分析页面：
+
+```text
+/analyze/:trackId
+```
+
+包含：
+
+* DeepSeek 歌词分析
+* BPM 分析
+* Key 分析
+* ReplayGain / Loudness
+* Integrated LUFS
+* Loudness Range
+* True Peak
+
+音频分析基于 Essentia.js。
+
+> DeepSeek 歌词分析是可选在线功能，需要自行配置 API Key。其他核心播放和歌词功能以本地数据为主。
+
+## Tech Stack
+
+* React 19
+* TypeScript
+* Vite
+* Redux Toolkit
+* React Router
+* Ant Design
+* IndexedDB
+* music-metadata
+* Essentia.js
+* Electron
+* electron-builder
+
+## Development
+
+要求：
+
+```text
+Node.js >= 22.13.0
+```
+
+安装并启动：
+
 ```bash
 npm install
 npm run dev
 ```
 
-- 预览构建产物
+构建：
+
 ```bash
 npm run build
 npm run preview
 ```
 
-- 桌面开发 / 打包
+Electron：
+
 ```bash
 npm run desktop:dev
 npm run desktop:build
 ```
 
-## 参考来源与“引用代码源”
-- `spotify-react-web-client`：本项目的界面交互与本地播放器工作流在架构和路由组织上有明显的承接关系。
-- `AAML` / `AMLL`：TTML 及歌词时轴语义相关能力采用该生态标准思路与兼容机制（通过 `@applemusic-like-lyrics/ttml` 结合项目实现）。
-- `Essentia.js`：用于音频分析能力接入。
-- 本仓库内现有 `docs/*` 为验证与行为说明文档，可用于复现和回归。
+当前桌面构建目标为 **Windows x64 Portable**。
 
-Tips: Vibecoding lesson test XD
+## Main Routes
+
+```text
+/
+/collection/tracks
+/search
+/collection/albums
+/album/:albumId
+/lyrics
+/analyze/:trackId
+/studio
+```
+
+## Credits
+
+本项目部分前端基础、页面结构和早期 UI 实现来源于 / 改造自：
+
+**francoborrelli/spotify-react-web-client**
+
+https://github.com/francoborrelli/spotify-react-web-client
+
+原项目使用 MIT License。
+
+本项目的部分视觉设计与播放器交互语言参考 Spotify。Spotify 名称及相关商标归其权利人所有，本项目与 Spotify 不存在官方关联。
+
+TTML 相关能力使用 / 参考 Apple Music-like Lyrics 生态，并使用：
+
+```text
+@applemusic-like-lyrics/ttml
+```
+
+音频分析使用：
+
+```text
+essentia.js
+```
+
+## License
+
+仓库根目录保留上游项目的 MIT License。
+
+部分第三方组件采用独立许可证，相关文件可见：
+
+```text
+public/licenses/
+```
+
+其中 Essentia.js 相关许可证为 AGPL-3.0。
+
+---
+
+**希望期末可以满分AWA**
