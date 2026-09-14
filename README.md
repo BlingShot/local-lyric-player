@@ -11,12 +11,14 @@
 # 展示图 **（字体因版权问题不会放出来）**
 ## 歌词界面
 <img width="2560" height="1440" alt="image" src="https://github.com/user-attachments/assets/fd083b81-5bd3-4bed-be3e-01bf61b7fae2" />
-<img width="2560" height="1392" alt="image" src="https://github.com/user-attachments/assets/8e966030-55a6-48bf-b705-df39d42180f7" />
-
-## 主界面
 <img width="2560" height="1392" alt="image" src="https://github.com/user-attachments/assets/d55fea4c-8427-4e8d-882e-11dd2a809534" />
+
+## 歌词编辑界面
 <img width="2560" height="1392" alt="image" src="https://github.com/user-attachments/assets/f82329b3-3241-469e-bee5-e30e0906a0c8" />
 <img width="2560" height="1392" alt="image" src="https://github.com/user-attachments/assets/f89bce1a-f10f-4a8d-a31d-410e39ab688a" />
+
+## 主界面
+<img width="2560" height="1392" alt="image" src="https://github.com/user-attachments/assets/8e966030-55a6-48bf-b705-df39d42180f7" />
 
 ## Analyze界面
 <img width="2560" height="1392" alt="image" src="https://github.com/user-attachments/assets/07422973-3bf4-492f-a922-238edff7952c" />
