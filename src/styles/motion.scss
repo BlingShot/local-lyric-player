@@ -1,0 +1,35 @@
+.offline-app .Main-section, .offline-navbar, .studio-main, .studio-header,
+.offline-library, .offline-file-details, .offline-playing-bar, .studio-transport {
+  transition: background-color 180ms ease, color 180ms ease;
+}
+.offline-saved-tracks .library-card, .offline-album-card, .analysis-header a,
+.offline-filter, .lyrics-import-button {
+  transition: background-color 180ms ease, color 180ms ease, border-color 180ms ease;
+}
+/* Native details retain keyboard semantics and animate both directions. */
+:where(.offline-app, .ant-modal, .ant-drawer) details > summary { list-style: none; cursor: pointer; }
+:where(.offline-app, .ant-modal, .ant-drawer) details > summary::-webkit-details-marker { display: none; }
+:where(.offline-app, .ant-modal, .ant-drawer) details > summary::before {
+  content: ''; display: inline-block; width: 6px; height: 6px; margin: 0 9px 1px 2px;
+  border-right: 1.5px solid currentColor; border-top: 1.5px solid currentColor;
+  transform: rotate(45deg); transition: transform 260ms cubic-bezier(.22, 1, .36, 1); flex-shrink: 0;
+}
+:where(.offline-app, .ant-modal, .ant-drawer) details[open] > summary::before { transform: rotate(135deg); }
+@supports (interpolate-size: allow-keywords) {
+  :where(.offline-app, .ant-modal, .ant-drawer) details { interpolate-size: allow-keywords; }
+  :where(.offline-app, .ant-modal, .ant-drawer) details::details-content {
+    block-size: 0; opacity: 0; overflow: clip;
+    transition: block-size 300ms cubic-bezier(.22, 1, .36, 1), opacity 200ms ease, content-visibility 300ms allow-discrete;
+  }
+  :where(.offline-app, .ant-modal, .ant-drawer) details[open]::details-content { block-size: auto; opacity: 1; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .offline-app .Main-section, .offline-navbar, .studio-main, .studio-header,
+  .offline-library, .offline-file-details, .offline-playing-bar, .studio-transport,
+  .offline-saved-tracks .library-card, .offline-album-card, .analysis-header a,
+  .offline-filter, .lyrics-import-button { transition: none; }
+  :where(.offline-app, .ant-modal, .ant-drawer) details::details-content,
+  :where(.offline-app, .ant-modal, .ant-drawer) details > summary::before { transition: none; }
+  .ant-dropdown, .ant-popover, .ant-modal, .ant-modal-mask, .ant-drawer-mask,
+  .ant-drawer-content-wrapper { animation-duration: 0s !important; transition-duration: 0s !important; }
+}

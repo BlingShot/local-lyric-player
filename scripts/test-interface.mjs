@@ -1,0 +1,122 @@
+import { chromium } from 'playwright';
+import { preview } from 'vite';
+import { taggedWav, png } from './library-fixtures.mjs';
+import { selectMenu } from './select-menu.mjs';
+import { mkdir, writeFile } from 'node:fs/promises';
+import assert from 'node:assert/strict';
+const origin = 'http://127.0.0.1:4190', root = 'test-results/interface'; await mkdir(root, { recursive: true });
+const server = await preview({ preview: { host: '127.0.0.1', port: 4190, strictPort: true } });
+const browser = await chromium.launch({ channel: 'msedge', headless: true });
+const context = await browser.newContext({ viewport: { width: 1600, height: 1050 } });
+const errors = [], external = [], checks = []; let phase = 'import';
+await context.route('**/*', route => new URL(route.request().url()).origin === origin ? route.continue() : (external.push(route.request().url()), route.abort()));
+await context.addInitScript(() => { const Audio = window.Audio; window.__audioCount = 0; window.Audio = class extends Audio { constructor(...args) { super(...args); window.__audioCount++; } }; });
+const page = await context.newPage(); page.setDefaultTimeout(15000); page.on('pageerror', error => errors.push(error.message));
+const lrc = prefix => Array.from({ length: 24 }, (_, i) => `[${Math.floor(i * 3 / 60).toString().padStart(2,'0')}:${(i * 3 % 60).toString().padStart(2,'0')}.00]${prefix} line ${i + 1}`).join('\n');
+const input = (name, prefix, color) => ({ name, mimeType: 'audio/wav', buffer: taggedWav({ TIT2: prefix + ' song with a long local title', TPE1: 'Local test artist' }, [{ type: 3, data: png(...color) }], lrc(prefix), 80) });
+const read = store => page.evaluate(store => new Promise(resolve => { const r = indexedDB.open('local-music-library'); r.onsuccess = () => { const db = r.result, tx = db.transaction(store), q = tx.objectStore(store).getAll(); tx.oncomplete = () => { db.close(); resolve(q.result); }; }; }), store);
+const chooseSong = prefix => page.getByRole('button', { name: `Play saved track ${prefix} song with a long local title`, exact: true }).click();
+const seek = async time => { await page.getByRole('slider', { name: 'Playback progress', exact: true }).fill(String(time)); await page.waitForFunction(t => Math.abs(document.querySelector('audio').currentTime - t) < .2, time); };
+const pause = async () => { const button = page.getByRole('button', { name: 'Pause', exact: true }); if (await button.count()) await button.click(); };
+const active = reader => reader.locator('.lyric-row[data-active] .lyric-text').allTextContents();
+try {
+  await page.goto(origin); await page.getByRole('button', { name: 'Import music', exact: true }).first().click();
+  await page.getByLabel('Choose audio files', { exact: true }).setInputFiles([input('a.wav','Alpha',[210,40,40]), input('b.wav','Beta',[35,90,215])]);
+  await page.getByRole('status').filter({ hasText: 'Added 2 files' }).waitFor(); await page.getByRole('button', { name: 'Close', exact: true }).click();
+  const tracks = await read('tracks'), a = tracks.find(t => t.fileName === 'a.wav'), b = tracks.find(t => t.fileName === 'b.wav');
+  await chooseSong('Alpha'); await pause();
+  await page.getByRole('button', { name: 'File details', exact: true }).click();
+  const sidebar = page.getByRole('complementary', { name: 'File details panel', exact: true });
+  await sidebar.getByRole('link', { name: 'Analyze', exact: true }).click();
+  phase = 'song route follow'; await page.locator('.analysis-header h1').filter({ hasText: 'Alpha' }).waitFor();
+  await chooseSong('Beta'); await page.waitForURL('**/analyze/' + encodeURIComponent(b.id)); await page.locator('.analysis-header h1').filter({ hasText: 'Beta' }).waitFor();
+  await chooseSong('Alpha'); await page.waitForURL('**/analyze/' + encodeURIComponent(a.id)); await pause();
+  assert.equal(await page.getByRole('heading',{name:'Metadata',exact:true}).count(),0);
+  assert.equal(await page.getByRole('button',{name:'Review and apply suggestions',exact:true}).count(),0);
+  checks.push('Analyze follows actual song changes; the removed Metadata section and action are absent');
+  phase = 'mini lyrics and shared offset';
+  await selectMenu(page, 'Right sidebar view', 'lyrics'); await sidebar.locator('.lyric-row').first().waitFor();
+  assert.equal(await sidebar.locator('.lyric-line-button').first().evaluate(el => getComputedStyle(el).fontSize), '28px');
+  const analyze = await sidebar.getByRole('link',{name:'Analyze',exact:true}).boundingBox();
+  const switcher = await sidebar.getByRole('combobox',{name:'Right sidebar view',exact:true}).boundingBox(); assert.ok(analyze.x > switcher.x);
+  await page.getByRole('button', { name: 'Lyrics', exact: true }).click();
+  const main = page.getByRole('region', { name: 'Lyrics page', exact: true }); await main.locator('.lyric-row').first().waitFor();
+  await seek(7); assert.deepEqual(await active(main), ['Alpha line 3']); assert.deepEqual(await active(sidebar), ['Alpha line 3']);
+  await page.getByRole('button',{name:'Settings',exact:true}).first().click();
+  const settings = page.getByRole('dialog',{name:'Settings',exact:true});
+  await settings.getByRole('spinbutton',{name:'Lyrics offset in seconds',exact:true}).fill('5');
+  await page.waitForFunction(() => [...document.querySelectorAll('.lyric-row[data-active] .lyric-text')].every(el => el.textContent === 'Alpha line 1'));
+  assert.equal(await page.locator('audio').evaluate(el=>el.currentTime),7);
+  await settings.getByRole('spinbutton',{name:'Lyrics offset in seconds',exact:true}).fill('-2');
+  await page.waitForFunction(() => [...document.querySelectorAll('.lyric-row[data-active] .lyric-text')].every(el => el.textContent === 'Alpha line 4'));
+  // Keep both views in sync even when persistence fails; no false saved result.
+  await page.evaluate(() => { window.__put = IDBObjectStore.prototype.put; IDBObjectStore.prototype.put = function(...args) { if (this.name === 'lyrics') throw new DOMException('Test quota', 'QuotaExceededError'); return window.__put.apply(this,args); }; });
+  await settings.getByRole('spinbutton',{name:'Lyrics offset in seconds',exact:true}).fill('2');
+  await settings.getByRole('alert').filter({hasText:'could not be saved'}).waitFor(); assert.deepEqual(await active(main),['Alpha line 2']); assert.deepEqual(await active(sidebar),['Alpha line 2']);
+  await page.evaluate(() => { IDBObjectStore.prototype.put = window.__put; });
+  await settings.getByRole('button',{name:'Retry save',exact:true}).click();
+  await page.waitForFunction(() => !document.querySelector('.offline-settings-content [role=alert]'));
+  await selectMenu(page, 'Lyric font', 'dm-sans', settings);
+  await page.evaluate(() => document.fonts.load('700 48px "DM Sans"'));
+  assert.equal(await page.evaluate(() => [...document.fonts].some(font => font.family === 'DM Sans' && font.status === 'loaded')),true);
+  for (const reader of [main, sidebar]) {
+    const style = await reader.locator('.lyric-line-button').first().evaluate(el=>({family:getComputedStyle(el).fontFamily,weight:getComputedStyle(el).fontWeight}));
+    assert.ok(style.family.includes('DM Sans')); assert.equal(style.weight,'700');
+  }
+  await settings.getByRole('slider',{name:'Lyric font size',exact:true}).fill('52');
+  assert.equal(await sidebar.locator('.lyric-line-button').first().evaluate(el => getComputedStyle(el).fontSize), '32px');
+  await settings.getByRole('button',{name:'Close',exact:true}).click();
+  await sidebar.getByRole('button',{name:'Seek to Alpha line 10',exact:true}).click();
+  await page.waitForFunction(() => Math.abs(document.querySelector('audio').currentTime - 29) < .1);
+  assert.equal(await page.locator('audio').evaluate(el=>el.paused),true);
+  await sidebar.locator('.lyrics-scroll').hover(); await page.mouse.wheel(0,280); await sidebar.getByRole('button',{name:'Resume following',exact:true}).waitFor();
+  await sidebar.getByRole('button',{name:'Resume following',exact:true}).click();
+  await chooseSong('Beta'); await pause(); await seek(7); assert.deepEqual(await active(main),['Beta line 3']); assert.deepEqual(await active(sidebar),['Beta line 3']);
+  assert.equal(new URL(page.url()).pathname,'/lyrics');
+  await chooseSong('Alpha'); await pause(); await seek(7); assert.deepEqual(await active(main),['Alpha line 2']);
+  await page.screenshot({path:root+'/lyrics.png'});
+  checks.push('Mini lyrics show multiple lines, follow actual audio, seek with shared offset, scroll independently and resume following; -20 px font tracks settings; signed offsets update both readers immediately, persist by song, and survive save failure with a clear error');
+  phase = 'menus and centered transport';
+  for (const width of [2552,1600,1100,800]) {
+    await page.setViewportSize({width,height:1000});
+    // At 800 px the same sidebar uses a drawer; close it before inspecting the bar.
+    if(width===800) await page.getByRole('button',{name:'Close',exact:true}).click();
+    const box = await page.locator('.offline-transport').boundingBox(); assert.ok(Math.abs(box.x+box.width/2-width/2)<1,`transport off-center at ${width}`);
+  }
+  await page.setViewportSize({width:1600,height:1050});
+  await page.getByRole('button',{name:'Open app menu',exact:true}).click();
+  const menuStyle = await page.locator('.app-menu:visible .ant-dropdown-menu').evaluate(el=>({bg:getComputedStyle(el).backgroundColor,radius:getComputedStyle(el).borderRadius}));
+  await page.keyboard.press('Escape');
+  await page.getByRole('button',{name:'Settings',exact:true}).first().click();
+  await page.getByRole('combobox',{name:'App theme',exact:true}).click();
+  const pickerStyle = await page.getByRole('listbox',{name:'App theme',exact:true}).evaluate(el=>({bg:getComputedStyle(el).backgroundColor,radius:getComputedStyle(el).borderRadius})); assert.deepEqual(menuStyle,pickerStyle);
+  await page.getByRole('option',{name:'Day',exact:true}).click();
+  await page.getByRole('button',{name:'Close',exact:true}).click();
+  await page.screenshot({path:root+'/day.png'});
+  await page.getByRole('button',{name:'Full screen lyrics',exact:true}).click();
+  await page.waitForFunction(()=>document.querySelector('[data-lyrics-fullscreen]')&&!document.querySelector('[data-lyrics-motion]'));
+  const center = await page.locator('.offline-transport').boundingBox();assert.ok(Math.abs(center.x+center.width/2-800)<1);
+  await page.getByRole('button',{name:'Exit full screen',exact:true}).click();
+  await page.waitForFunction(()=>!document.querySelector('[data-lyrics-motion]'));
+  checks.push('Logo and all value menus share popup surface and motion; keyboard Escape works; day mode follows; player controls center at desktop/tablet widths and in full screen');
+  phase='Studio follows queue';
+  await main.getByRole('link',{name:'Lyric Studio',exact:true}).click();
+  await page.locator('.studio-song strong').filter({hasText:'Alpha'}).waitFor();
+  await selectMenu(page,'Playback speed','1.5');
+  // Choosing a different file is Studio's explicit song-change action; reaching
+  // the end intentionally stays on the edited song to protect the timing workflow.
+  await page.getByRole('button',{name:'Track info',exact:true}).click();
+  await page.getByRole('button',{name:'Choose audio',exact:true}).click();
+  await page.getByLabel('Choose studio audio',{exact:true}).setInputFiles(input('b-studio.wav','Beta',[35,90,215]));
+  await page.locator('.studio-song strong').filter({hasText:'Beta'}).waitFor();
+  await page.getByRole('button',{name:'Paste lyrics',exact:true}).waitFor();
+  assert.equal(await page.evaluate(()=>window.__audioCount),1);
+  await page.getByRole('link',{name:'Back to player',exact:true}).click();
+  await chooseSong('Alpha'); await pause(); await page.reload(); await page.getByRole('button',{name:'Lyrics',exact:true}).click();
+  await main.locator('.lyric-row').first().waitFor(); await seek(7); assert.deepEqual(await active(main),['Alpha line 2']);
+  assert.ok((await main.locator('.lyric-line-button').first().evaluate(el=>getComputedStyle(el).fontFamily)).includes('DM Sans'));
+  checks.push('Studio switches its song and binds the corresponding draft without another audio instance; offset and locally loaded DM Sans Bold survive reload');
+  assert.deepEqual(errors,[]);assert.deepEqual(external,[]);
+  await writeFile(root+'/verification.json',JSON.stringify({checks,errors,external},null,2));console.log(JSON.stringify({checks,errors,external},null,2));
+} catch(error) { console.error('PHASE',phase); console.error('BROWSER',errors); await page.screenshot({path:root+'/failure.png'});throw error; }
+finally {await browser.close();await new Promise(resolve=>server.httpServer.close(resolve));}

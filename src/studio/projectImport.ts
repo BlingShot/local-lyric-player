@@ -1,0 +1,143 @@
+import { NS, decodeId } from './projectExport.ts';
+import { newProject, tokenize, uid, unit, vocalLine, STRUCTURES, type StudioProject, type VocalLine, type Unit, type Section } from './project.ts';
+
+const attr = (e: Element, name: string, ns?: string) => ns ? e.getAttributeNS(ns, name) : e.getAttribute(name);
+const ownId = (e: Element, prefix: string) => { const id = attr(e, 'id', NS.xml); return id ? decodeId(id) : uid(prefix); };
+export function parseTtmlMillis(input: string): number {
+  const value = input.trim(), offset = value.match(/^(\d+(?:\.\d+)?)(h|m|s|ms)$/), clock = value.match(/^(?:(\d+):)?([0-5]?\d):([0-5]\d)(?:\.(\d+))?$/);
+  let ms: number;
+  if (offset) ms = Number(offset[1]) * ({ h: 3600000, m: 60000, s: 1000, ms: 1 }[offset[2]]!);
+  else if (clock) ms = (Number(clock[1] || 0) * 3600 + Number(clock[2]) * 60 + Number(clock[3]) + Number(`0.${clock[4] || 0}`)) * 1000;
+  else if (/^\d+(?:\.\d+)?$/.test(value)) ms = Number(value) * 1000;
+  else throw new Error(`Unsupported TTML time: ${value}. Use media clock times or h/m/s/ms offsets; frames, ticks and wallclock are not supported.`);
+  if (!Number.isFinite(ms) || ms > 86400000) throw new Error('TTML time exceeds the supported 24-hour range.');
+  return Math.round(ms);
+}
+interface Bounds { start: number; end: number | null }
+export function importProjectTtml(source: string, trackId: string, fileName: string): StudioProject {
+  if (source.length > 2_000_000) throw new Error('TTML exceeds 2 MB.');
+  if (/<!DOCTYPE|<!ENTITY/i.test(source)) throw new Error('DTD and entity declarations are forbidden. No external resources are loaded.');
+  const xml = new DOMParser().parseFromString(source, 'application/xml');
+  if (xml.getElementsByTagNameNS('*', 'parsererror').length) throw new Error('This TTML file is not valid XML.');
+  const root = xml.documentElement;
+  if (root.localName !== 'tt' || root.namespaceURI !== NS.tt) throw new Error('Expected the TTML namespace and a tt root.');
+  if ([...root.children].some(e => e.namespaceURI !== NS.tt || !['head', 'body'].includes(e.localName))) throw new Error('Only head and body are supported under the TTML root.');
+  const all = [root, ...root.getElementsByTagName('*')];
+  if (all.length > 50000) throw new Error('TTML exceeds 50,000 elements.');
+  const notes = new Set<string>(), project = newProject(trackId, ''); project.lines = []; project.sections = []; project.metadata.extra = Object.create(null); project.metadataInitialized = true;
+  const xmlIds = new Set<string>();
+  const absolute = !!attr(root, 'timing', NS.apple) || all.some(e => !!attr(e, 'key', NS.apple));
+  const knownAttrs = new Set(['id', 'lang', 'space', 'begin', 'end', 'dur', 'timeContainer', 'timeBase', 'agent', 'role', 'type', 'key', 'value', 'timing', 'song-part', 'songPart', 'for']);
+  for (const e of all) {
+    const xmlId = attr(e, 'id', NS.xml); if (xmlId) { if (xmlIds.has(xmlId)) throw new Error(`Duplicate XML ID: ${xmlId}.`); xmlIds.add(xmlId); }
+    if (['audio', 'image', 'resources', 'set', 'animate', 'animation'].includes(e.localName)) throw new Error(`Unsupported TTML <${e.localName}>; external resources are never loaded.`);
+    if (attr(e, 'timeContainer') && attr(e, 'timeContainer') !== 'par') throw new Error('Sequential timing containers are not supported.');
+    if (attr(e, 'timeBase', NS.param) && attr(e, 'timeBase', NS.param) !== 'media') throw new Error('Only media time is supported.');
+    for (const a of e.attributes) {
+      if (['repeatCount', 'repeatDur', 'condition', 'ruby'].includes(a.localName)) throw new Error(`Unsupported TTML ${a.localName}. Keep the source; this structure cannot yet be edited losslessly.`);
+      if (a.namespaceURI !== NS.xmlns && (!knownAttrs.has(a.localName) || a.namespaceURI && !Object.values(NS).includes(a.namespaceURI))) notes.add(`Attribute ${a.name} is retained in the project source but is not exported.`);
+    }
+  }
+  const bounds = (e: Element, parent: Bounds): Bounds => {
+    const begin = attr(e, 'begin'), end = attr(e, 'end'), dur = attr(e, 'dur'), origin = absolute ? 0 : parent.start;
+    const start = begin === null ? parent.start : origin + parseTtmlMillis(begin);
+    let stop = end === null ? parent.end : origin + parseTtmlMillis(end);
+    if (dur !== null) stop = Math.min(stop ?? Infinity, start + parseTtmlMillis(dur));
+    if (start < parent.start || stop !== null && parent.end !== null && stop > parent.end) notes.add('A child exceeds its declared parent time range. Effective times are clipped to the container; original declarations remain in project source.');
+    return { start: Math.max(start, parent.start), end: parent.end === null ? stop : stop === null ? parent.end : Math.min(stop, parent.end) };
+  };
+  const singer = (e: Element, inherited?: string) => { const id = attr(e, 'agent', NS.meta); return id === null ? inherited : decodeId(id); };
+  project.metadata.language = attr(root, 'lang', NS.xml) || 'und';
+  for (const e of all.filter(e => e.localName === 'agent' && e.namespaceURI === NS.meta)) {
+    const id = attr(e, 'id', NS.xml); if (!id) { notes.add('Unnamed agent metadata needs review.'); continue; }
+    const name = e.getElementsByTagNameNS(NS.meta, 'name')[0]?.textContent || id;
+    const type = attr(e, 'type', NS.meta) || attr(e, 'type'); if (type && !['group', 'person'].includes(type)) notes.add(`Performer type ${type} is retained in source; editor uses person until reassigned.`);
+    project.performers.push({ id: decodeId(id), name, type: type === 'group' ? 'group' : 'person', color: ['#1ed760', '#85b7ff', '#ffb6de'][project.performers.length % 3], align: 'auto' });
+  }
+  for (const e of all.filter(e => e.localName === 'meta' && e.namespaceURI === NS.amll)) { const key = attr(e, 'key'), value = attr(e, 'value'); if (key !== null && value !== null) (project.metadata.extra[key] ??= []).push(value); }
+  project.metadata.title = project.metadata.extra.musicName?.join(' / ') || all.find(e => e.localName === 'title' && e.namespaceURI === NS.meta)?.textContent || '';
+  project.metadata.artist = project.metadata.extra.artists?.join(' / ') || ''; project.metadata.album = project.metadata.extra.album?.join(' / ') || '';
+  for (const key of ['musicName', 'artists', 'album']) delete project.metadata.extra[key];
+  const first = project.metadata.extra['localMusic:lyricStartMs']?.[0], last = project.metadata.extra['localMusic:lyricEndMs']?.[0];
+  if (first !== undefined || last !== undefined) {
+    if ((first !== undefined && (!/^\d+$/.test(first) || !Number.isSafeInteger(Number(first)))) || last === undefined || !/^\d+$/.test(last) || !Number.isSafeInteger(Number(last)) || Number(last) <= (first === undefined ? -1 : Number(first))) throw new Error('Invalid lyric boundary metadata.');
+    project.boundaries = { startMs: first === undefined ? null : Number(first), endMs: Number(last) };
+    delete project.metadata.extra['localMusic:lyricStartMs']; delete project.metadata.extra['localMusic:lyricEndMs'];
+  }
+  const paragraphMap = new Map<string, VocalLine>();
+  function readVocal(e: Element, b: Bounds, line: VocalLine, inherited?: string, depth = 0, timed = false) {
+    if (depth > 40) throw new Error('TTML nesting exceeds 40 elements.');
+    const performer = singer(e, inherited);
+    let textBuffer = '';
+    const flush = () => {
+      if (!textBuffer) return;
+      let preserve: string | null = null, node: Element | null = e;
+      while (node && preserve === null) { preserve = attr(node, 'space', NS.xml); node = node.parentElement; }
+      const raw = textBuffer; textBuffer = '';
+      const text = preserve === 'preserve' ? raw : /^\s*$/.test(raw) && /[\n\r]/.test(raw) ? '' : raw.replace(/\s+/g, ' ');
+      if (!text) return;
+      const ownUnit = e.localName === 'span' && !!attr(e, 'id', NS.xml) && !e.children.length;
+      const units: Unit[] = timed || ownUnit ? [{ ...unit(text), id: ownId(e, 'w'), startMs: timed ? b.start : null, endMs: timed ? b.end : null, performerId: performer !== line.performerId ? performer : undefined }] : tokenize(text).map(w => ({ ...w, performerId: performer !== line.performerId ? performer : undefined }));
+      line.units.push(...units);
+    };
+    for (const node of e.childNodes) {
+      if (node.nodeType === 3 || node.nodeType === 4) { textBuffer += node.textContent || ''; continue; }
+      flush(); if (node.nodeType !== 1) continue;
+      const child = node as Element;
+      if (child.localName !== 'span' || child.namespaceURI !== NS.tt) throw new Error(`Unsupported lyric element <${child.tagName}>. Current draft is unchanged.`);
+      const role = attr(child, 'role', NS.meta), cb = bounds(child, b);
+      if (role === 'x-translation' || role === 'x-roman') {
+        if (child.children.length || attr(child, 'begin') !== null) notes.add('Timed/nested annotations are retained in source; edited annotations are line-level.');
+        line.annotations.push({ id: ownId(child, 'a'), targetId: line.id, kind: role === 'x-translation' ? 'translation' : 'romanization', text: child.textContent || '', language: attr(child, 'lang', NS.xml) || '' }); continue;
+      }
+      if (role === 'x-bg' || role === 'background') {
+        const bg = vocalLine('', 'background', line.id); bg.id = ownId(child, 'l'); bg.startMs = cb.start; bg.endMs = cb.end; bg.performerId = singer(child, performer);
+        readVocal(child, cb, bg, bg.performerId, depth + 1); finish(bg); project.lines.push(bg); continue;
+      }
+      if (role && !['lyrics', 'x-lead'].includes(role)) throw new Error(`Unsupported vocal role: ${role}.`);
+      if (role === 'x-lead') { line.startMs = cb.start; line.endMs = cb.end; line.performerId = singer(child, performer); }
+      const leaf = ![...child.children].some(c => !['x-translation', 'x-roman'].includes(attr(c, 'role', NS.meta) || ''));
+      readVocal(child, cb, line, performer, depth + 1, leaf && (attr(child, 'begin') !== null || attr(child, 'end') !== null || timed));
+    }
+    flush();
+  }
+  function finish(line: VocalLine) {
+    line.text = line.units.map(w => w.text).join('');
+    if (line.endMs === null) { const ends = line.units.map(w => w.endMs).filter((n): n is number => n !== null); if (ends.length) line.endMs = Math.max(...ends); }
+  }
+  function container(e: Element, parent: Bounds, inherited?: string, section?: Section, depth = 0) {
+    if (depth > 40) throw new Error('TTML nesting exceeds 40 elements.');
+    const b = bounds(e, parent), performer = singer(e, inherited), tag = attr(e, 'song-part', NS.apple) || attr(e, 'songPart', NS.apple);
+    let current = section;
+    if (tag) { const normalized = tag.toUpperCase().replace(/[-_ ]/g, '') as Section['tag']; if (STRUCTURES.includes(normalized)) { current = { id: ownId(e, 's'), tag: normalized, lineIds: [], startMs: attr(e, 'begin') !== null ? b.start : null, endMs: attr(e, 'end') !== null || attr(e, 'dur') !== null ? b.end : null }; project.sections.push(current); } else notes.add(`Unknown section ${tag} is retained in source.`); }
+    for (const node of e.childNodes) if (node.nodeType === 3 && node.textContent?.trim()) throw new Error('Lyric text must be inside a paragraph.');
+    for (const child of e.children) {
+      if (child.namespaceURI !== NS.tt) throw new Error(`Unsupported body namespace: ${child.namespaceURI}.`);
+      if (child.localName === 'div') container(child, b, performer, current, depth + 1);
+      else if (child.localName === 'p') {
+        const role = attr(child, 'role', NS.meta); if (role && !['lyrics', 'x-lead'].includes(role)) throw new Error(`Paragraph role ${role} is not supported by the editor. Use background spans inside a lead paragraph.`);
+        const cb = bounds(child, b), line = vocalLine(); line.id = ownId(child, 'l'); line.performerId = singer(child, performer); line.startMs = cb.start; line.endMs = cb.end;
+        project.lines.push(line); current?.lineIds.push(line.id);
+        const key = attr(child, 'key', NS.apple) || attr(child, 'id', NS.xml) || line.id;
+        if (paragraphMap.has(key)) throw new Error(`Duplicate paragraph key: ${key}.`);
+        paragraphMap.set(key, line);
+        readVocal(child, cb, line, line.performerId); finish(line);
+      } else throw new Error(`Unsupported TTML container <${child.tagName}>.`);
+    }
+  }
+  const bodies = [...root.children].filter(e => e.localName === 'body' && e.namespaceURI === NS.tt);
+  if (bodies.length !== 1) throw new Error('TTML needs exactly one body.');
+  container(bodies[0], { start: 0, end: null });
+  for (const e of all.filter(e => e.localName === 'text' && e.namespaceURI === NS.apple)) {
+    const parent = e.parentElement, reference = attr(e, 'for') || '', line = paragraphMap.get(reference);
+    if (!line || !['translation', 'transliteration'].includes(parent?.localName || '')) { notes.add(`Unlinked sidecar ${reference} is retained in source.`); continue; }
+    if (e.children.length) notes.add('Nested sidecar annotation timing is retained in source; editing is line-level.');
+    line.annotations.push({ id: ownId(e, 'a'), targetId: line.id, kind: parent!.localName === 'translation' ? 'translation' : 'romanization', text: e.textContent || '', language: attr(parent!, 'lang', NS.xml) || '' });
+  }
+  const knownHead = new Set(['metadata', 'agent', 'name', 'title', 'meta', 'translations', 'translation', 'transliterations', 'transliteration', 'text']);
+  const head = [...root.children].find(e => e.localName === 'head');
+  for (const e of head?.getElementsByTagName('*') || []) if (!knownHead.has(e.localName)) notes.add(`Metadata <${e.tagName}> remains in project source and is not exported.`);
+  if (project.lines.length > 5000) throw new Error('Use at most 5,000 lines.');
+  project.selectedId = project.lines[0]?.id || ''; project.settings.mode = attr(root, 'timing', NS.apple) === 'Word' || project.lines.some(l => l.units.some(w => w.startMs !== null)) ? 'word' : 'line';
+  project.source = { text: source, fileName, notices: [...notes] }; return project;
+}

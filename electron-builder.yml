@@ -1,0 +1,28 @@
+appId: com.localmusic.player
+productName: Lyric Player
+directories:
+  app: .cache/desktop-app
+  output: release
+  buildResources: desktop
+files:
+  - build/**/*
+  - electron/*
+  - package.json
+  - LICENSE
+  - '!node_modules/**/*'
+asar: true
+compression: maximum
+# Match the two interface languages; preserve ICU. Text uses fonts on the computer.
+electronLanguages: [en-US, zh-CN]
+electronDist: node_modules/electron/dist
+npmRebuild: false
+win:
+  target:
+    - target: portable
+      arch: [x64]
+  icon: desktop/app.ico
+  executableName: Lyric Player
+  artifactName: Lyric-Player-${version}-Windows-x64.exe
+portable:
+  requestExecutionLevel: user
+  splashImage: null

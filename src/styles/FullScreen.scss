@@ -1,0 +1,78 @@
+.Full-screen-page {
+  height: 100vh;
+  width: 100vw;
+  display: flex;
+  align-items: center;
+  flex-direction: column-reverse;
+
+  background: linear-gradient(-45deg, #541d0c, #40081e, #084359, #054233);
+  background-size: 400% 400%;
+
+  animation: gradient 25s ease infinite;
+
+  @keyframes gradient {
+    0% {
+      background-position: 0% 50%;
+    }
+    50% {
+      background-position: 100% 50%;
+    }
+    100% {
+      background-position: 0% 50%;
+    }
+  }
+
+  .player-pause-button {
+    height: 45px;
+    width: 45px;
+    border-radius: 50%;
+  }
+
+  button svg {
+    height: 18px !important;
+  }
+
+  .album-cover {
+    height: 70px;
+    width: 70px;
+  }
+
+  #song-and-artist-name {
+    margin-left: 20px;
+    p,
+    h1 {
+      width: 100% !important;
+      max-width: none !important;
+      text-decoration: none;
+    }
+
+    .song-title {
+      display: -webkit-box;
+      font-size: 2.2rem;
+      font-weight: 900;
+      line-height: 1.25em;
+      -webkit-line-clamp: 5;
+      -webkit-box-orient: vertical;
+      overflow: hidden;
+    }
+
+    .song-artist {
+      font-size: 0.875rem;
+      line-height: 1.6666666667em;
+      opacity: 0.7;
+    }
+  }
+
+  .volume-control-container {
+    float: right;
+  }
+
+  .song-title {
+    display: -webkit-box;
+    font-size: 2em;
+    line-height: 1.25em;
+    -webkit-line-clamp: 5;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+  }
+}

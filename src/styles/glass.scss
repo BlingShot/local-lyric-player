@@ -1,0 +1,79 @@
+/* Static glass surfaces; card contrast and scroll clipping are shared. */
+[data-glass=true] {
+  --glass-surface: #18232fc9; --glass-card: #24334198; --glass-field: #ffffff12; --glass-edge: #d1edff38;
+  --glass-text: #f5f8fc; --glass-muted: #becbd7; --glass-ink: #12202c;
+  --glass-shadow: 0 8px 28px #0002, inset 0 1px #ffffff35, inset 0 -1px #0002;
+  --glass-backdrop: radial-gradient(ellipse at 18% 15%, #263745, transparent 55%), radial-gradient(ellipse at 85% 82%, #302d48, transparent 55%), #0c1018;
+  .offline-app { background: var(--glass-backdrop); isolation: isolate; position: relative; overflow: hidden; }
+  .offline-library.Navigation-section, .offline-app .Main-section, .offline-file-details, .studio-main {
+    background: var(--glass-surface); box-shadow: var(--glass-shadow), inset 0 0 0 1px var(--glass-edge); backdrop-filter: blur(18px) saturate(140%);
+    isolation: isolate; clip-path: inset(0 round 10px);
+  }
+  .offline-app .offline-playing-bar, .studio-page .studio-transport {
+    background: linear-gradient(140deg, #ffffff12, #ffffff02), var(--glass-surface); border-radius: 12px; box-shadow: var(--glass-shadow), inset 0 0 0 1px var(--glass-edge); backdrop-filter: blur(18px) saturate(140%);
+  }
+  .offline-app .offline-track-page thead {
+    background: var(--glass-surface); backdrop-filter: blur(18px) saturate(140%);
+    box-shadow: inset 0 -1px var(--glass-edge);
+  }
+  .offline-navbar .offline-settings-button { color: var(--glass-muted); }
+  .offline-navbar .offline-settings-button:hover { color: var(--glass-text); }
+  .lyrics-page, .mini-lyrics { position: relative; isolation: isolate; }
+  .lyric-backdrop {
+    position: absolute; inset: 0; z-index: -1; overflow: hidden; pointer-events: none; contain: paint; border-radius: inherit;
+    background: radial-gradient(ellipse at 15% 18%, #b7d9ff50, transparent 60%), radial-gradient(ellipse at 88% 82%, #d5b9ff40, transparent 60%);
+    img {
+      position: absolute; inset: -48px; width: calc(100% + 96px); height: calc(100% + 96px);
+      max-width: none; max-height: none; margin: 0; object-fit: cover; border-radius: 0;
+      filter: blur(40px) saturate(.9); opacity: .76;
+    }
+    &::after {
+      content: ''; position: absolute; inset: 0;
+      background: linear-gradient(145deg, #ffffff10, transparent 55%, #00000012), color-mix(in srgb, var(--lyrics-background) 65%, transparent);
+      backdrop-filter: blur(18px) saturate(135%); box-shadow: inset 0 0 0 1px #ffffff12;
+    }
+  }
+  .analysis-card, .analysis-audio-card, .analysis-metric, .analysis-stat, .analysis-metrics > div, .offline-album-card,
+  .studio-page .studio-inspector details, .studio-page .studio-detail, .studio-page .studio-live-preview, .listening-totals > div {
+    position: relative; isolation: isolate; background: var(--glass-card); box-shadow: var(--glass-shadow), inset 0 0 0 1px var(--glass-edge); border-radius: 10px; clip-path: inset(0 round 10px);
+  }
+  .analysis-themes, .studio-page .studio-inspector details:nth-child(2) { --glass-card: #38334c98; }
+  .analysis-moods, .analysis-advisory { --glass-card: #413b3d98; }
+  .analysis-card p, .analysis-card .analysis-caption, .analysis-page summary { color: var(--glass-muted); }
+  .offline-search.search-input, .offline-app .app-select, .studio-page .app-select { background: var(--glass-field); box-shadow: inset 0 0 0 1px var(--glass-edge); color: var(--glass-text); }
+  .app-menu .ant-dropdown-menu, .ant-drawer-content, .ant-modal-content, .ant-popover-inner { background: var(--glass-surface); backdrop-filter: blur(20px) saturate(140%); box-shadow: var(--glass-shadow), inset 0 0 0 1px var(--glass-edge); }
+  .ant-drawer-body, .ant-drawer-header { background: transparent; }
+  .studio-page { --studio-panel: #1c2a36; --studio-field: #ffffff12; --studio-soft: #ffffff08; --studio-border: var(--glass-edge); --studio-text: var(--glass-text); --studio-muted: var(--glass-muted); }
+  .analysis-page button:not(.analysis-text-button), .studio-tools button, .studio-sync-tools > button:not(.studio-mark), .studio-page .studio-inspector button, .studio-page .studio-detail button, .lyrics-import-button {
+    background: linear-gradient(135deg, #ffffff12, #ffffff03); color: var(--glass-text); border-color: var(--glass-edge); box-shadow: inset 0 1px #ffffff20;
+    transition: background-color 200ms ease, box-shadow 250ms ease;
+    &:hover:enabled { background-color: #ffffff15; box-shadow: inset 0 1px #ffffff60, 0 2px 12px #95dcff15; }
+  }
+  .offline-app .white-button, .offline-app .player-pause-button, .studio-page .studio-format-tabs button[aria-pressed=true] { background: #edf6fc; color: #12202c; }
+  .studio-page .studio-mark { background: #1ed760; color: #062710; }
+  .offline-app button:disabled { opacity: .55; }
+  .studio-row-head { background: #202f3c; }
+}
+[data-theme=light][data-glass=true] {
+  --glass-surface: #f5faffbd; --glass-card: #f7fbffb3; --glass-field: #ffffff7a; --glass-edge: #ffffffd9;
+  --glass-text: #1b2a3b; --glass-muted: #42556a; --glass-ink: #f5f8fc;
+  --glass-shadow: 0 8px 28px #20364d13, inset 0 1px #fff, inset 0 -1px #899bad28;
+  --glass-backdrop: radial-gradient(ellipse at 18% 15%, #cdddea, transparent 55%), radial-gradient(ellipse at 85% 82%, #ded6eb, transparent 55%), #e8edf2;
+  .studio-page { --studio-panel: #f1f6fa; --studio-field: #ffffff80; --studio-border: #849cb63d; }
+  .analysis-themes, .studio-page .studio-inspector details:nth-child(2) { --glass-card: #f1edffb8; }.analysis-moods, .analysis-advisory { --glass-card: #fff5edb8; }
+  .offline-app .white-button, .offline-app .player-pause-button, .studio-page .studio-format-tabs button[aria-pressed=true] { background: #22384e; color: #fff; }
+  .studio-row-head { background: #eef5fa; }
+}
+/* The sidebar keeps a dark cover-derived lyric surface in both app themes. */
+[data-theme=light][data-glass=true] .offline-app .mini-lyrics .lyric-performer { color: #ffffff8c; }
+[data-theme=light][data-glass=true] .offline-app .mini-lyrics .lyric-annotation { color: #ffffffa0; }
+[data-theme=light][data-glass=true] .offline-app .mini-lyrics .lyric-row[data-active] .lyric-annotation { color: #ffffffd0; }
+/* Glass is an explicit in-app opt-in, including when OS transparency is disabled. */
+.listening-totals { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; margin-bottom: 12px; }
+.listening-totals > div { padding: 14px 12px; border-radius: 8px; background: #8881; }
+.listening-totals span { display: block; font-size: 12px; color: #999; margin-bottom: 8px; }
+.listening-totals strong { font-size: 16px; font-variant-numeric: tabular-nums; }
+.vocal-label-setting { margin-bottom: 20px; }
+.vocal-label-setting label { display: flex !important; flex-direction: row !important; justify-content: space-between; align-items: center !important; gap: 16px; font-size: 13px; }
+.vocal-label-setting input, .offline-settings-content input[type=checkbox] { accent-color: #1ed760; flex-shrink: 0; }
+.route-loading { display: grid; place-content: center; min-height: 180px; color: #b3b3b3; }

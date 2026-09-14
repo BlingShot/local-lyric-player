@@ -1,0 +1,12 @@
+/* Fonts are provided by the computer or a user-selected file, never bundled. */
+:root { --app-font-family: system-ui, "Microsoft YaHei", sans-serif; --local-lyrics-font-family: system-ui, "Microsoft YaHei", sans-serif; }
+.local-font-setting { margin-block: 8px 20px; }
+.local-font-setting h4 { margin: 0 0 8px; }
+.local-font-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.local-font-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+.local-font-actions button { font-size: 12px; }
+.local-font-search { width: 100%; padding: 10px 12px; border: 1px solid #8886; border-radius: 8px; color: inherit; background: #8881; font: inherit; margin-block: 12px; }
+.local-font-list { max-height: 340px; overflow-y: auto; display: flex; flex-direction: column; gap: 4px; }
+.local-font-list button { flex-shrink: 0; width: 100%; padding: 10px 12px; text-align: left; border: 1px solid transparent; border-radius: 6px; background: transparent; color: inherit; cursor: pointer; font-size: 16px; transition: background-color 160ms ease; }
+.local-font-list button:hover, .local-font-list button[aria-pressed=true] { background: #8882; }
+.local-font-list button:focus-visible { outline: 2px solid #1ed760; outline-offset: -2px; }

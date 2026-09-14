@@ -1,0 +1,20 @@
+.offline-details-heading { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 24px; }
+.offline-details-heading .analysis-details-link { margin: 0; padding: 7px 12px; font-size: 13px; flex-shrink: 0; }
+.offline-file-details[data-mode=lyrics] { display: flex; flex-direction: column; min-height: 0; overflow: hidden; padding: 18px; }
+.offline-file-details[data-mode=lyrics] .offline-details-heading { flex-shrink: 0; margin-bottom: 14px; }
+.mini-lyrics { --lyrics-highlight: #fff; --lyrics-muted: #ffffff80; --lyrics-past: #ffffff40; background: var(--lyrics-background); border-radius: 8px;
+  min-height: 0; flex: 1; display: flex; flex-direction: column; overflow: hidden; container-type: inline-size; transition: background-color 600ms ease; }
+.mini-lyrics-song { display: flex; gap: 12px; padding: 16px; align-items: center; flex-shrink: 0; color: #fff; }
+.offline-file-details .mini-lyrics-song img { width: 40px; height: 40px; margin: 0; object-fit: cover; border-radius: 4px; }
+.mini-lyrics-song > div { min-width: 0; }
+.mini-lyrics-song strong, .mini-lyrics-song span { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 13px; }
+.mini-lyrics-song span { margin-top: 4px; color: #ffffffa8; font-size: 12px; }
+.mini-lyrics .lyrics-lines { padding: 30px 18px 55vh; }
+.mini-lyrics .lyrics-resume { max-width: calc(100% - 24px); font-size: 12px !important; padding: 8px 14px; white-space: nowrap; }
+.mini-lyrics .lyric-interlude { font-size: var(--lyrics-font-max); }
+.mini-lyrics .lyric-annotation { font-size: 13px; }
+.mini-lyrics .lyric-background { padding-left: 12px; }
+[data-theme=light] .offline-app .mini-lyrics .lyric-line-button:is(:hover, :focus-visible) { color: #ffffffb8; }
+.mini-lyrics-empty { display: flex; flex: 1; gap: 16px; flex-direction: column; align-items: center; justify-content: center; padding: 20px; text-align: center; }
+.offline-file-details .mini-lyrics-empty p, .offline-file-details .mini-lyrics-error { color: #ffffffb8; font-size: 13px; }
+.mini-lyrics-error { padding: 12px; }

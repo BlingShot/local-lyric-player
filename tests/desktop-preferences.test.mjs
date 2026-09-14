@@ -1,0 +1,32 @@
+import { test } from 'node:test';
+import assert from 'node:assert/strict';
+import { mkdtemp, mkdir, readFile, writeFile, rename, symlink, rmdir, stat } from 'node:fs/promises';
+import path from 'node:path';
+import { DesktopConfig } from '../electron/config.mjs';
+import { FolderImporter } from '../electron/folder-import.mjs';
+import { copyDatabase } from '../electron/storage.mjs';
+const root = path.resolve('test-results');
+const crypto = { isEncryptionAvailable:()=>true, encryptString:text=>Buffer.from(`fixture:${text}`), decryptString:bytes=> {const text=bytes.toString();if(!text.startsWith('fixture:'))throw Error('invalid');return text.slice(8);} };
+test('config atomic failure, concurrent sections, invalid JSON protection and data-location migration', async()=>{
+ const profile=await mkdtemp(path.join(root,'config-unit-')), c=new DesktopConfig(profile,crypto);
+ await Promise.all([c.set('theme','light'),c.set('playback',{volume:.4,repeat:'all',shuffle:true}),c.set('deepseek',{apiKey:'test-key',model:'deepseek-flash',language:'en'})]);
+ assert.equal(await c.get('theme'),'light');assert.equal((await c.get('deepseek')).apiKey,'test-key');
+ const text=await readFile(c.file,'utf8');assert.ok(!text.includes('test-key'));
+ await mkdir(c.file+'.tmp');await assert.rejects(c.set('theme','dark'),/not saved/);assert.equal(await readFile(c.file,'utf8'),text);await rmdir(c.file+'.tmp');
+ await writeFile(c.file,'{bad json');await assert.rejects(c.set('theme','dark'),/Cannot read config/);assert.equal(await readFile(c.file,'utf8'),'{bad json');
+ await writeFile(c.file,text);const destination=profile+'-migrated';copyDatabase(profile,destination);assert.equal(await readFile(path.join(destination,'config.json'),'utf8'),text);
+ const moved=new DesktopConfig(destination,crypto);assert.equal((await moved.get('deepseek')).apiKey,'test-key');
+ await moved.set('deepseek',{apiKey:'',model:'deepseek-flash',language:'en'});assert.equal((await moved.get('deepseek')).apiKey,'');
+});
+test('native folder tokens bind to selected tree, reject changed files and expire on cancellation',async()=>{
+ const profile=await mkdtemp(path.join(root,'folder-unit-')),dir=path.join(profile,'music'),outside=path.join(profile,'outside');await mkdir(dir);await mkdir(outside);
+ await writeFile(path.join(dir,'a.wav'),Buffer.alloc(100));await writeFile(path.join(outside,'secret.wav'),Buffer.alloc(100));
+ await symlink(outside,path.join(dir,'linked'),'junction');
+ const c=new DesktopConfig(profile,crypto),f=new FolderImporter(c);await f.choose(dir);const id=await f.start(),batch=await f.next(id);assert.equal(batch.files.length,1);
+ const reply=await f.response(new Request(batch.files[0].url));assert.equal((await reply.arrayBuffer()).byteLength,100);
+ await writeFile(path.join(dir,'a.wav'),Buffer.alloc(101));assert.equal((await f.response(new Request(batch.files[0].url))).status,409);
+ await f.end(id);assert.equal((await f.response(new Request(batch.files[0].url))).status,410);
+ const again=await f.start();assert.notEqual(id,again);await assert.rejects(f.next(id),/cancelled/);await f.end(again);
+ await rename(dir,dir+'-gone');await assert.rejects(f.start(),/unavailable/);
+ assert.equal((await stat(path.join(outside,'secret.wav'))).size,100);
+});

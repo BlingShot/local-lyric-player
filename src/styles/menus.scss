@@ -1,0 +1,31 @@
+.app-menu { z-index: 2400; }
+.app-menu .ant-dropdown-menu { padding: 5px; border-radius: 9px; background: #282828; box-shadow: 0 8px 28px #0006; min-width: 150px; max-width: min(420px, calc(100vw - 24px)); max-height: min(420px, 70vh); overflow-y: auto; }
+.app-menu .ant-dropdown-menu .ant-dropdown-menu-item { padding: 9px 12px; min-height: 36px; border-radius: 5px; color: #f2f2f2; font-size: 14px; line-height: 1.35; transition: background-color 140ms ease; }
+.app-menu .ant-dropdown-menu .ant-dropdown-menu-item:hover, .app-menu .ant-dropdown-menu .ant-dropdown-menu-item-active { background: #ffffff12; }
+.app-menu .ant-dropdown-menu .ant-dropdown-menu-item-selected { color: #1ed760; background: #ffffff0b; }
+.app-menu .ant-dropdown-menu .ant-dropdown-menu-item-disabled { color: #888; }
+.offline-app .app-select, .ant-modal .app-select, .ant-drawer .app-select { display: inline-flex; align-items: center; justify-content: space-between; gap: 12px;
+  min-height: 34px; padding: 7px 10px; border: 1px solid #ffffff20; border-radius: 6px; background: #252525; color: #eee; font: inherit; font-size: 13px; max-width: 100%; cursor: pointer; }
+.app-select > span { overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
+.app-select > svg { flex-shrink: 0; }
+.app-select:disabled { opacity: .5; cursor: default; }
+.app-select:focus-visible { outline: 2px solid #1ed760; outline-offset: 2px; }
+.app-menu-motion-enter, .app-menu-motion-appear { animation: app-menu-enter 180ms cubic-bezier(.22, 1, .36, 1) both; }
+.app-menu-motion-leave { animation: app-menu-leave 130ms ease-in both; pointer-events: none; }
+@keyframes app-menu-enter { from { opacity: 0; } to { opacity: 1; } }
+@keyframes app-menu-leave { from { opacity: 1; } to { opacity: 0; } }
+[data-theme=light] { .app-menu .ant-dropdown-menu { background: #fff; box-shadow: 0 8px 28px #0002; }
+  .app-menu .ant-dropdown-menu .ant-dropdown-menu-item { color: #202124; }
+  .app-menu .ant-dropdown-menu .ant-dropdown-menu-item:hover, .app-menu .ant-dropdown-menu .ant-dropdown-menu-item-active { background: #00000008; }
+  .app-menu .ant-dropdown-menu .ant-dropdown-menu-item-selected { color: #087d36; background: #e9f5ed; }
+  .offline-app .app-select, .ant-modal .app-select, .ant-drawer .app-select { color: #202124; background: #f3f5f7; border-color: #0002; }
+}
+@media (prefers-reduced-motion: reduce) { .app-menu-motion-enter, .app-menu-motion-appear, .app-menu-motion-leave { animation-duration: 0s !important; } }
+
+/* Animate contents, not the measured popup box, so placement stays stable. */
+.app-menu-motion-enter .ant-dropdown-menu, .app-menu-motion-appear .ant-dropdown-menu { animation: menu-content-in 180ms cubic-bezier(.22, 1, .36, 1) both; }
+@keyframes menu-content-in { from { transform: translateY(-4px); } to { transform: none; } }
+.app-select-field { display: flex; align-items: center; justify-content: space-between; gap: 12px; min-width: 0; }
+.offline-settings-content section > .app-select-field { margin-bottom: 24px; }
+.offline-list-tools .app-select-field, .analysis-source-picker .app-select-field { justify-content: flex-start; flex-wrap: wrap; }
+@media (prefers-reduced-motion: reduce) { .app-menu-motion-enter .ant-dropdown-menu, .app-menu-motion-appear .ant-dropdown-menu { animation: none; } }

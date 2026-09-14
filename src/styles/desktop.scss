@@ -1,0 +1,40 @@
+.offline-nav-start { display: flex; align-items: center; gap: 12px; }
+.desktop-history { display: flex; gap: 2px; }
+.desktop-history svg { fill: none !important; }
+
+/* The existing navigation is the title bar. Native caption buttons keep Windows
+   snapping, resizing and accessibility without adding a second strip. */
+[data-desktop] {
+  .main-container.offline-shell { padding-top: 0 !important; }
+  .offline-navbar, .studio-header { -webkit-app-region: drag; user-select: none; }
+  .offline-navbar :is(button, a, input, label, [role=menu]),
+  .studio-header :is(button, a, input, [role=menu]) { -webkit-app-region: no-drag; }
+  .offline-navbar {
+    position: relative; height: 60px; min-height: 60px; flex-shrink: 0; gap: 12px;
+    padding: 0 calc(100vw - env(titlebar-area-width, calc(100vw - 138px)) - env(titlebar-area-x, 0px) + 12px) 0 8px;
+    margin-left: env(titlebar-area-x, 0px);
+  }
+  .offline-navbar .offline-brand, .offline-navbar .offline-brand img { width: 34px; height: 34px; }
+  .offline-navbar .offline-home-button { width: 40px; height: 40px; }
+  .offline-navbar .offline-home-button svg { width: 20px; height: 20px; }
+  .offline-navbar .offline-search.search-input { height: 44px; margin: 0; }
+  .offline-navbar .offline-search-group { position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%); width: min(36%, 540px); }
+  .offline-navbar .offline-nav-actions { margin-left: auto; gap: 16px; font-size: 12px; }
+  .offline-navbar .white-button { padding: 8px 14px; font-size: 12px; }
+  .offline-navbar .offline-nav-actions > button { display: inline-flex; align-items: center; justify-content: center; min-height: 40px; margin: 0; line-height: 20px; }
+  @media (max-width: 1200px) {
+    .offline-nav-start { flex-shrink: 0; }
+    .offline-navbar .offline-search-group { position: static; transform: none; width: auto; flex: 1; min-width: 0; }
+  }
+  .studio-header {
+    padding-right: calc(100vw - env(titlebar-area-width, calc(100vw - 138px)) - env(titlebar-area-x, 0px) + 12px);
+    margin-left: env(titlebar-area-x, 0px);
+    grid-template-columns: minmax(0, 1fr) minmax(0, 400px) minmax(0, 1fr);
+  }
+  /* Narrow desktop windows keep the song on its own centered row. */
+  @media (max-width: 1450px) {
+    .studio-header { grid-template-columns: minmax(0, 1fr) auto; row-gap: 8px; }
+    .studio-song { grid-row: 2; grid-column: 1 / -1; max-width: 480px; justify-self: center; }
+    .studio-header-actions { grid-row: 1; grid-column: 2; }
+  }
+}

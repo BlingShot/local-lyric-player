@@ -1,0 +1,5 @@
+.desktop-storage-location, .desktop-storage-pending, .desktop-storage-previous { margin-block: 16px; }
+.desktop-storage-heading { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; margin-bottom: 8px; }
+.desktop-storage-settings code { display: block; white-space: normal; overflow-wrap: anywhere; font-family: inherit; font-size: 13px; line-height: 1.5; padding: 10px 12px; border: 1px solid var(--essential-subdued, #555); border-radius: 8px; margin-bottom: 10px; }
+.desktop-storage-pending { padding-top: 16px; border-top: 1px solid var(--essential-subdued, #555); }
+.desktop-storage-settings .settings-folder-actions { flex-wrap: wrap; gap: 8px; }

@@ -1,0 +1,61 @@
+.Search-Page {
+  padding: 20px;
+  margin-top: 80px;
+
+  .section-title {
+    color: white;
+    font-weight: 700;
+    font-size: 1.5rem;
+    margin-bottom: 10px;
+  }
+
+  .top-result-container {
+    width: 100%;
+
+    .playlist-card {
+      padding: 5px;
+      --tw-bg-opacity: 0.5;
+      background-color: rgb(40 40 40 / var(--tw-bg-opacity));
+
+      &:hover {
+        background-color: #282828 !important;
+      }
+
+      img {
+        width: 90px;
+        height: 90px;
+        object-fit: cover;
+        border-radius: 0.375rem;
+        &.rounded {
+          border-radius: 50%;
+        }
+      }
+
+      h3 {
+        font-size: 1.5rem;
+        margin-bottom: 10px;
+      }
+    }
+  }
+
+  .song-details {
+    color: #b3b3b3;
+    font-size: 0.8rem;
+
+    .title {
+      color: white;
+      font-size: 1rem;
+    }
+
+    a:hover {
+      color: white;
+      text-decoration: underline;
+    }
+  }
+}
+
+.recent-searches-list {
+  .playlist-header {
+    font-size: 1.5rem;
+  }
+}
