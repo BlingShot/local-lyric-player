@@ -114,7 +114,10 @@
   .Main-section, .lyrics-page { border-radius: 0; }
   .lyrics-page { padding-bottom: 130px; }
   .lyrics-header { padding: 24px 40px 12px; }
-  .lyrics-lines { width: min(100%, 1440px); padding-inline: clamp(24px, 3cqi, 64px); margin-inline: auto; }
+  .lyrics-lines { box-sizing: border-box; width: min(100%, 1440px); padding-inline: clamp(24px, 3cqi, 64px); margin-inline: auto; }
+  .lyric-line-button { text-align: start; }
+  .lyric-row:is(.lyric-background, [data-popout]) { padding-inline: 0; }
+  .lyric-text, .lyric-annotation { padding-inline: 0; }
   .lyrics-reader::before, .lyrics-reader::after {
     content: ''; position: absolute; left: 0; right: 0; z-index: 2; height: clamp(44px, 8vh, 96px);
     pointer-events: none; backdrop-filter: blur(5px);
