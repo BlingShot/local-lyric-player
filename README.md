@@ -1,4 +1,4 @@
-# local-music-player
+# Lyric Player
 
 本项目是一个离线优先的本地音乐播放器与歌词管理应用，基于 React + Vite + Redux 构建，支持 Web 运行和 Electron 打包运行，核心目标是统一“导入本地音乐 -> 导入/编辑歌词 -> 分析 -> 播放管理”的闭环。
 
@@ -87,6 +87,4 @@ npm run desktop:build
 - `Essentia.js`：用于音频分析能力接入。
 - 本仓库内现有 `docs/*` 为验证与行为说明文档，可用于复现和回归。
 
-## Vibecoding lesson test XD
-
-Vibecoding lesson test XD
+Tips: Vibecoding lesson test XD
