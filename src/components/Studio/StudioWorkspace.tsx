@@ -96,8 +96,8 @@ export function StudioWorkspace({ trackId, changeTrack, seed }: { trackId: strin
       if (file.size > 8_000_000) throw new Error('File exceeds 8 MB.');
       const bytes = new Uint8Array(await file.arrayBuffer()), encoding = bytes[0] === 255 && bytes[1] === 254 ? 'utf-16le' : bytes[0] === 254 && bytes[1] === 255 ? 'utf-16be' : 'utf-8';
       const source = new TextDecoder(encoding, { fatal: true }).decode(bytes);
-      const imported = /\.json$/i.test(file.name) ? parseProject(source) : /\.ttml$/i.test(file.name) ? importProjectTtml(source, trackId, file.name) : importProjectLrc(source, trackId, audioName);
-      setPreview(imported); if (/\.(ttml|json)$/i.test(file.name)) setSurface('ttml');
+      const imported = /\.json$/i.test(file.name) ? parseProject(source) : /\.(ttml|amll)$/i.test(file.name) ? importProjectTtml(source, trackId, file.name) : importProjectLrc(source, trackId, audioName);
+      setPreview(imported); if (/\.(ttml|amll|json)$/i.test(file.name)) setSurface('ttml');
     } catch (e) { setMessage((e as Error).message); } finally { setBusy(false); }
   };
   const download = (file: Download) => { const a = document.createElement('a'); a.href = file.url; a.download = file.name; document.body.append(a); a.click(); a.remove(); };
@@ -129,12 +129,12 @@ export function StudioWorkspace({ trackId, changeTrack, seed }: { trackId: strin
   const selectedWord = selectedLine?.units.find(w => w.id === draft?.selectedUnitId) || selectedLine?.units.find(w => w.kind === 'word');
   const destinationId = draft ? syncDestination(draft, 1) : undefined;
   const destination = destinationId === LYRIC_END ? t('End of Lyric') : draft?.lines.find(l => l.id === destinationId)?.text || t('Add lyrics to begin');
-  return <div className='offline-app studio-page' data-studio-format={surface} onDragOver={e => { e.preventDefault(); e.stopPropagation(); }} onDrop={e => { e.preventDefault(); e.stopPropagation(); const file = e.dataTransfer.files[0]; if (file) /\.(ttml|lrc|json)$/i.test(file.name) ? void importFile(file) : void chooseAudio(file); }}>
+  return <div className='offline-app studio-page' data-studio-format={surface} onDragOver={e => { e.preventDefault(); e.stopPropagation(); }} onDrop={e => { e.preventDefault(); e.stopPropagation(); const file = e.dataTransfer.files[0]; if (file) /\.(ttml|amll|lrc|json)$/i.test(file.name) ? void importFile(file) : void chooseAudio(file); }}>
     <header className='studio-header'><div className='studio-brand'><AppMenu /><div className='studio-heading'><h1>{t("Lyric Studio")}</h1></div></div>
       <div className='studio-song' aria-label={t("Studio song")}>{track ? <><img src={trackCover(track)} alt='' /><div><strong>{track.name}</strong><span>{track.artist || t("Local audio")}</span></div><button className='studio-song-info' onClick={() => setInfoOpen(true)} aria-label={t("Track info")}>ⓘ</button></> : <button onClick={() => audioInput.current?.click()}>{t("Choose audio")}</button>}</div>
       <div className='studio-header-actions'><Link to='/'>{t("Back to player")}</Link><AppDropdown trigger={['click']} menu={{ items: [{ key: 'lrc', label: t("Write LRC to song copy") }, { key: 'word', label: t("Write word TTML to song copy") }, { key: 'line', label: t("Write line TTML to song copy") }], onClick: ({ key }) => { setWriteCopy(true); void exportFiles(key as ExportFormat); } }}><button title={t("Save lyrics inside the library audio copy")} disabled={!draft || busy || !track || track.unavailable}>{t("Write to song ▾")}</button></AppDropdown><AppDropdown trigger={['click']} menu={{ items: [{ key: 'word', label: t("Export word TTML") }, { key: 'line', label: t("Export line TTML") }, { key: 'lrc', label: t("Export LRC") }, { key: 'both', label: t("Export both") }], onClick: ({ key }) => { setWriteCopy(false); void exportFiles(key as ExportFormat); } }}><button className='white-button' disabled={!draft || busy}>{t("Export ▾")}</button></AppDropdown></div>
       <input hidden type='file' ref={audioInput} accept={AUDIO_ACCEPT} aria-label={t("Choose studio audio")} onChange={e => { void chooseAudio(e.target.files?.[0]); e.target.value = ''; }} />
-      <input hidden type='file' ref={lyricInput} accept='.lrc,.ttml' aria-label={t("Choose studio lyrics")} onChange={e => { void importFile(e.target.files?.[0]); e.target.value = ''; }} />
+      <input hidden type='file' ref={lyricInput} accept='.lrc,.ttml,.amll' aria-label={t("Choose studio lyrics")} onChange={e => { void importFile(e.target.files?.[0]); e.target.value = ''; }} />
       <input hidden type='file' ref={projectInput} accept='.json' aria-label={t("Choose studio project")} onChange={e => { void importFile(e.target.files?.[0]); e.target.value = ''; }} />
     </header>
     <main className='studio-main' aria-label={t("Lyric Studio")}>
