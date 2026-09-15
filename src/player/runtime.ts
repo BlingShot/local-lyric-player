@@ -1,3 +1,5 @@
+import { attachNativeAudio } from './nativeAudio';
+import { readLyrics } from '../lyrics/repository';
 import { store } from '../store/store';
 import { libraryActions } from '../store/slices/library';
 import { playerActions } from '../store/slices/player';
@@ -110,6 +112,7 @@ export function getLocalPlayer() {
     // source rather than allocating a full-song PCM buffer or transcoding files.
     element.preservesPitch = true;
     document.body.append(element);
+    attachNativeAudio(element, () => { const id = store.getState().player.currentId; return id ? audioCopies.get(id) : undefined; });
     instance = new LocalAudioPlayer(element, {
       onChange: state => {
         store.dispatch(playerActions.update(state)); persistSettings();
@@ -280,16 +283,21 @@ export function removeAudioFile(id: string) {
   });
 }
 
-export async function writeLocalLyricsCopy(id: string, source: string): Promise<Blob> {
+export async function writeLocalLyricsCopy(id: string, source: string, expected?: { source: string; savedAt: number }): Promise<Blob> {
   let saved: Blob | undefined;
   const success = await operation('Writing lyrics to the saved audio copy…', async () => {
     const track = store.getState().library.tracks.find(item => item.id === id), original = audioCopies.get(id);
     if (!track || !original || track.unavailable) throw new Error('This audio copy is unavailable. Restore it before writing lyrics.');
+    const before = await readLyrics(id);
+    if (expected && (before?.source !== expected.source || before?.savedAt !== expected.savedAt)) throw new Error('Lyrics changed during translation. No audio was overwritten.');
     const result = await writeAudioLyrics(original, track.fileName || track.name, source);
     // Re-read the actual new tag with the same reader used by the player before committing.
     const verified = await readAudioTags(new File([result], track.fileName || track.name, { type: result.type }), true);
     if (verified.lyrics?.source.trim() !== source.trim()) throw new Error('The written lyrics could not be verified. The saved audio copy is unchanged.');
     const record = embeddedRecord(id, track.fileName || track.name, verified.lyrics)!;
+    const current = await readLyrics(id);
+    if (expected && (current?.source !== expected.source || current?.savedAt !== expected.savedAt)) throw new Error('Lyrics changed during translation. No audio was overwritten.');
+    if (before?.offsetMs !== undefined) record.offsetMs = before.offsetMs;
     const updated = await saveAudioLyricsCopy(track, result, record);
     audioCopies.set(id, result);
     store.dispatch(libraryActions.updateTracks([{ ...track, ...updated }]));

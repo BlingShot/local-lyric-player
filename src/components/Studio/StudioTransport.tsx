@@ -1,3 +1,4 @@
+import { VolumeControl } from '../VolumeControl';
 import { t } from '../../i18n';
 import { AppSelect } from '../Menu';
 import { useAppSelector } from '../../store/store';
@@ -15,7 +16,7 @@ export function StudioTransport({ trackId }: { trackId: string }) {
   return <footer className='studio-transport' aria-label={t("Studio player")}>
     {error && <p className='studio-audio-error' role='alert'>{t(error.message)}</p>}
     <button className='player-pause-button' aria-label={playing ? t("Pause") : t("Play")} disabled={currentId !== trackId || !currentId} onClick={() => getLocalPlayer().toggle()}>{playing ? <Pause /> : <Play />}</button>
-    <PlayerProgress />
+    <PlayerProgress /><VolumeControl label="Studio volume" />
     <div className='studio-speed'>{t("Speed")}<AppSelect label={t("Playback speed")} value={String(rate)} onChange={value => changeRate(Number(value))} options={[.5, .75, 1, 1.25, 1.5].map(value => ({ value: String(value), label: `${value}×` }))} /></div>
   </footer>;
 }

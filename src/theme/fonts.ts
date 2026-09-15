@@ -41,7 +41,7 @@ async function prepare(font: LocalFont) {
   if (!(font.bytes instanceof Uint8Array) || font.bytes.byteLength > 32 * 1024 * 1024) throw new Error('Choose a valid TTF, OTF, WOFF or WOFF2 font under 32 MB.');
   const family = `LocalMusicFont${++faceId}`;
   // Chromium validates the actual font before it replaces the saved selection.
-  const face = new FontFace(family, new Uint8Array(font.bytes).buffer);
+  const face = new FontFace(family, new Uint8Array(font.bytes).buffer, { weight: '100 900', stretch: '50% 200%' });
   await face.load();
   return { face, family: cssFontFamily(family), label: font.name };
 }

@@ -3,7 +3,7 @@ import { defaultLyricsAppearance, type LyricsAppearance } from '../../lyrics/app
 
 const uiSlice = createSlice({
   name: 'ui',
-  initialState: { libraryCollapsed: false, libraryDrawerOpen: false, detailsOpen: false, detailsMode: 'details' as 'details' | 'lyrics', importOpen: false, queueOpen: false, importMessage: '', importNoticeId: 0, playbackMemoryError: '', lyricsFullscreen: false, lyricsMotion: null as 'enter' | 'exit' | 'return' | null, settingsOpen: false, lyricsAppearance: defaultLyricsAppearance },
+  initialState: { libraryCollapsed: false, libraryDrawerOpen: false, detailsOpen: false, detailsMode: 'details' as 'details' | 'lyrics', importOpen: false, queueOpen: false, importMessage: '', importNoticeId: 0, playbackMemoryError: '', lyricsFullscreen: false, lyricsImmersive: false, lyricsMotion: null as 'enter' | 'exit' | 'return' | null, settingsOpen: false, lyricsAppearance: defaultLyricsAppearance },
   reducers: {
     toggleLibrary(state) { state.libraryCollapsed = !state.libraryCollapsed; },
     openLibraryDrawer(state) { state.libraryDrawerOpen = true; },
@@ -13,7 +13,8 @@ const uiSlice = createSlice({
     openImport(state) { state.importOpen = true; state.libraryDrawerOpen = false; },
     closeImport(state) { state.importOpen = false; },
     toggleQueue(state) { state.queueOpen = !state.queueOpen; },
-    setLyricsFullscreen(state, action: PayloadAction<boolean>) { state.lyricsFullscreen = action.payload; },
+    setLyricsFullscreen(state, action: PayloadAction<boolean>) { state.lyricsFullscreen = action.payload; state.lyricsImmersive = false; },
+    setLyricsImmersive(state, action: PayloadAction<boolean>) { state.lyricsImmersive = state.lyricsFullscreen && action.payload; },
     setLyricsMotion(state, action: PayloadAction<'enter' | 'exit' | 'return' | null>) { state.lyricsMotion = action.payload; },
     setSettingsOpen(state, action: PayloadAction<boolean>) { state.settingsOpen = action.payload; },
     setLyricsAppearance(state, action: PayloadAction<LyricsAppearance>) { state.lyricsAppearance = action.payload; },

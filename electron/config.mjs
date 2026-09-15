@@ -1,7 +1,7 @@
 import { readFile, writeFile, rename, unlink } from 'node:fs/promises';
 import path from 'node:path';
 
-const sections = new Set(['deepseek', 'theme', 'surface', 'language', 'playback', 'lyrics-appearance', 'track-columns', 'normalization', 'import-folder', 'fonts']);
+const sections = new Set(['deepseek', 'theme', 'surface', 'language', 'playback', 'lyrics-appearance', 'track-columns', 'normalization', 'import-folder', 'fonts', 'spotify', 'typography', 'audio-output']);
 
 // Small preferences only. Music, scan history and per-song projects stay in IndexedDB.
 export class DesktopConfig {
@@ -22,6 +22,10 @@ export class DesktopConfig {
     if (!sections.has(section)) throw new Error('Unknown setting.');
     await this.queue.catch(() => {});
     const value = (await this.load()).settings[section];
+    if (section === 'spotify' && value?.encryptedSession) {
+      try { return JSON.parse(this.crypto.decryptString(Buffer.from(value.encryptedSession, 'base64'))); }
+      catch { throw new Error('Spotify credentials could not be unlocked. Sign in again.'); }
+    }
     if (section !== 'deepseek' || !value) return value;
     let apiKey = '';
     if (value.encryptedKey) {
@@ -36,6 +40,11 @@ export class DesktopConfig {
     const task = this.queue.catch(() => {}).then(async () => {
       const data = await this.load();
       let saved = value;
+      if (section === 'spotify') {
+        if (!value || JSON.stringify(value).length > 16000) throw new Error('Invalid Spotify session.');
+        if (value.refreshToken && !this.crypto.isEncryptionAvailable()) throw new Error('Windows credential encryption is unavailable.');
+        saved = value.refreshToken ? { encryptedSession: this.crypto.encryptString(JSON.stringify(value)).toString('base64') } : { clientId: value.clientId || '' };
+      }
       if (section === 'deepseek') {
         if (!value || !['deepseek-flash', 'deepseek-v4-pro'].includes(value.model) || !['auto', 'en', 'zh'].includes(value.language) ||
             typeof value.apiKey !== 'string' || value.apiKey.length > 512 || value.apiKey && !/^[\x21-\x7e]+$/.test(value.apiKey)) throw new Error('Invalid DeepSeek settings.');

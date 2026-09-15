@@ -26,7 +26,8 @@ export interface SavedLyrics {
   document: LyricDocument;
   parserVersion: number;
   savedAt: number;
-  origin?: 'file' | 'embedded';
+  origin?: 'file' | 'embedded' | 'amll';
+  remote?: { isrc: string; spotifyId: string; authors: string[] };
   offsetMs?: number;
 }
 export class LyricsError extends Error {

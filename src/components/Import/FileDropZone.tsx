@@ -10,6 +10,18 @@ export function FileDropZone({ children }: { children: ReactNode }) {
   const depth = useRef(0);
   const dispatch = useAppDispatch();
   const { importOpen, importMessage, importNoticeId } = useAppSelector(state => state.ui);
+  const resetDrag = () => { depth.current = 0; setDragging(false); };
+  useEffect(() => {
+    // Capture completion even when a nested lyric importer stops propagation.
+    window.addEventListener('drop', resetDrag, true);
+    window.addEventListener('dragend', resetDrag, true);
+    window.addEventListener('blur', resetDrag);
+    return () => {
+      window.removeEventListener('drop', resetDrag, true);
+      window.removeEventListener('dragend', resetDrag, true);
+      window.removeEventListener('blur', resetDrag);
+    };
+  }, []);
   useEffect(() => {
     if (importOpen || !importMessage) return;
     const timeout = window.setTimeout(() => dispatch(uiActions.setImportMessage('')), 4000);
@@ -17,19 +29,21 @@ export function FileDropZone({ children }: { children: ReactNode }) {
   }, [dispatch, importOpen, importMessage, importNoticeId]);
   const isFiles = (event: DragEvent) => event.dataTransfer.types.includes('Files');
   return <div className='offline-file-drop-zone'
-    onDragEnter={event => {
+    onDragEnterCapture={event => {
       if (!isFiles(event)) return;
+      if (event.target instanceof Element && event.target.closest('[data-local-file-drop], .lyrics-page')) { resetDrag(); return; }
       event.preventDefault(); depth.current++; setDragging(true);
     }}
     onDragOver={event => {
       if (!isFiles(event)) return;
       event.preventDefault(); event.dataTransfer.dropEffect = 'copy';
     }}
-    onDragLeave={event => {
+    onDragLeaveCapture={event => {
       if (!isFiles(event)) return;
       depth.current = Math.max(0, depth.current - 1);
       if (!depth.current) setDragging(false);
     }}
+    onDropCapture={resetDrag}
     onDrop={event => {
       // Prevent files and URL drops from navigating the application away from the player.
       event.preventDefault();

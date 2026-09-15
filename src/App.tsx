@@ -1,3 +1,4 @@
+import { SettingsDrawer } from './components/Settings';
 import { ConfigProvider, theme } from 'antd';
 import zhCN from 'antd/locale/zh_CN';
 import enUS from 'antd/locale/en_US';
@@ -27,6 +28,7 @@ import './styles/mini-lyrics.scss';
 import './styles/desktop.scss';
 import './styles/glass.scss';
 import './styles/studio-sync.scss';
+import './styles/v08.css';
 
 const StudioPage = lazy(() => import('./pages/Studio').then(module => ({ default: module.StudioPage })));
 const AnalyzePage = lazy(() => import('./pages/Analyze').then(module => ({ default: module.AnalyzePage })));
@@ -49,6 +51,7 @@ export default function App() {
             <Routes>
               <Route path='/' element={<LibraryPage />} />
               <Route path='/collection/tracks' element={<LibraryPage />} />
+              <Route path='/collection/recent' element={<LibraryPage key='recent' recent />} />
               <Route path='/search' element={<LibraryPage searching />} />
               <Route path='/collection/albums' element={<AlbumsPage />} />
               <Route path='/album/:albumId' element={<AlbumPage />} />
@@ -58,7 +61,7 @@ export default function App() {
             </Routes>
           </AppLayout>
           } /></Routes>
-          <ImportDialog />
+          <ImportDialog /><SettingsDrawer />
           </FileDropZone>
         </BrowserRouter>
       </Provider>

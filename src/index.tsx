@@ -1,3 +1,5 @@
+import { initializeTypography } from './theme/typography';
+import { initializeAudioOutput } from './player/audioOutput';
 import { StrictMode } from 'react';
 import { createRoot } from 'react-dom/client';
 import App from './App';
@@ -17,7 +19,8 @@ void initializeSurfaceConfig();
 initializeDesktopZoom();
 void initializeLanguage();
 void initializeLocalFonts();
-void initializeLibrary().then(ready => { if (ready) void initializeFolderImport(); });
+void initializeTypography();
+void initializeLibrary().then(ready => { if (ready) { void initializeFolderImport(); void initializeAudioOutput(); } });
 createRoot(document.getElementById('root')!).render(
   <StrictMode><App /></StrictMode>
 );

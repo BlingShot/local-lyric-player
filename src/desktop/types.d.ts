@@ -14,6 +14,16 @@ declare global {
   interface Window {
     queryLocalFonts?: () => Promise<{ family: string; fullName: string; postscriptName: string; style: string }[]>;
     localMusicDesktop?: {
+      nativeAudioDevices(): Promise<{ name: string; description: string }[]>;
+      nativeAudioMeter(enabled: boolean): Promise<void>;
+      nativeAudioEnergy(): Promise<number>;
+      nativeAudioLoad(value: { id: string; bytes: ArrayBuffer; device: string; exclusive: boolean; position: number; volume: number; speed: number }): Promise<void>;
+      nativeAudioCommand(command: 'play' | 'pause' | 'seek' | 'volume' | 'speed' | 'stop', value?: number): Promise<void>;
+      onNativeAudioState(callback: (state: { id: string; time: number; duration: number; paused: boolean; ended: boolean; ready: boolean; error?: string; exclusive?: boolean }) => void): () => void;
+      spotifyInfo(): Promise<{ clientId: string; connected: boolean }>;
+      spotifyLogin(clientId: string): Promise<{ clientId: string; connected: boolean }>;
+      spotifyLogout(): Promise<void>;
+      spotifyMatch(track: { name: string; artist?: string; duration?: number }): Promise<{ id: string; isrc: string } | null>;
       zoom(direction: -1 | 0 | 1): Promise<number>;
       getConfig<T>(key: string): Promise<T | undefined>;
       setConfig(key: string, value: unknown): Promise<void>;

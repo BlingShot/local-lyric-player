@@ -1,83 +1,54 @@
-import { t } from '../../i18n';
+import { useEffect, useState } from 'react';
+import { Modal } from 'antd';
+import { t, setLanguage, useLanguage, type Language } from '../../i18n';
 import { AppSelect } from '../Menu';
-import { setLanguage, useLanguage, type Language } from '../../i18n';
-import { useRef, useState } from 'react';
-import { Drawer } from 'antd';
-import { store, useAppDispatch, useAppSelector } from '../../store/store';
+import { useAppDispatch, useAppSelector } from '../../store/store';
 import { uiActions } from '../../store/slices/offlineUi';
-import { saveLyricsAppearance } from '../../library/database';
-import { defaultLyricsAppearance, validLyricsAppearance, type LyricsAppearance } from '../../lyrics/appearance';
-import { useSavedLyrics } from '../../lyrics/useSavedLyrics';
-import { useLyricOffset } from '../../lyrics/useLyricOffset';
-import { LyricsTimingControls } from '../Lyrics/LyricsTiming';
+import { setThemeMode, useAppTheme, type ThemeMode } from '../../theme';
+import { setGlassSurface, useSurface } from '../../theme/surface';
+import { useConfigReadError } from '../../desktop/config';
 import { AutoImportFolder } from './AutoImportFolder';
 import { NormalizationSettings } from './Normalization';
 import { DeepSeekSettings } from './DeepSeek';
+import { SpotifySettings } from './Spotify';
 import { DesktopStorageSettings } from './DesktopStorage';
-import { setThemeMode, useAppTheme, type ThemeMode } from '../../theme';
-import { useConfigReadError } from '../../desktop/config';
-import { setGlassSurface, useSurface } from '../../theme/surface';
 import { ListeningTimeSettings } from './ListeningTime';
 import { LocalFontPicker } from './LocalFontPicker';
-import { chooseLocalFont } from '../../theme/fonts';
-import { VocalLabelsToggle } from '../Lyrics/VocalLabelsToggle';
+import { LyricAppearanceSettings } from './LyricAppearance';
+import { AudioOutputSettings } from './AudioOutput';
+import { useSavedLyrics } from '../../lyrics/useSavedLyrics';
+import { useLyricOffset } from '../../lyrics/useLyricOffset';
+import { LyricsTimingControls } from '../Lyrics/LyricsTiming';
+import { VolumeControl } from '../VolumeControl';
 
+const categories = ['Appearance', 'Lyrics', 'Playback', 'Online services', 'Storage'] as const;
 function SettingsContent() {
-  const locale = useLanguage();
-  const dispatch = useAppDispatch();
-  const appTheme = useAppTheme();
-  const surface = useSurface();
-  const configError = useConfigReadError();
-  const appearance = useAppSelector(state => state.ui.lyricsAppearance);
-  const track = useAppSelector(state => state.library.tracks.find(item => item.id === state.player.currentId));
-  const { saved, loading, error: lyricError } = useSavedLyrics(track?.id, track?.embeddedLyricsChecked);
-  const timing = useLyricOffset(saved);
-  const [error, setError] = useState('');
-  const request = useRef(0);
-  const update = async (patch: Partial<LyricsAppearance>) => {
-    const next = validLyricsAppearance({ ...store.getState().ui.lyricsAppearance, ...patch });
-    const current = ++request.current;
-    dispatch(uiActions.setLyricsAppearance(next)); setError('');
-    try { await saveLyricsAppearance(next); }
-    catch { if (current === request.current) setError('Appearance changed for this session but could not be saved. Check browser storage, then retry.'); }
-  };
-  return <div className='offline-settings-content'>
-    <section><h3>{t("Language")}</h3><AppSelect label={t("Interface language")} value={locale.language} onChange={value => void setLanguage(value as Language)} options={[{ value: 'en', label: t("English") }, { value: 'zh-CN', label: '简体中文' }]} />{locale.error && <p role='alert'>{t(locale.error)}<button onClick={() => void setLanguage(locale.language)}>{t("Retry save")}</button></p>}</section>
+  const [tab, setTab] = useState<typeof categories[number]>('Appearance'), locale = useLanguage(), theme = useAppTheme(), surface = useSurface(), configError = useConfigReadError();
+  const track = useAppSelector(state => state.library.tracks.find(track => track.id === state.player.currentId));
+  const { saved } = useSavedLyrics(track?.id, track?.embeddedLyricsChecked), timing = useLyricOffset(saved);
+  return <div className='settings-workspace'><nav className='settings-navigation' aria-label={t('Settings categories')}>
+    {categories.map(category => <button key={category} aria-current={tab === category ? 'page' : undefined} onClick={() => setTab(category)}>{t(category)}</button>)}
+  </nav><div className='settings-pages'>
     {configError && <p role='alert'>{t(configError)}</p>}
-    <section><h3>{t("Appearance")}</h3><div className='app-select-field'>{t("Theme")}<AppSelect label={t("App theme")} value={appTheme.mode} onChange={value => setThemeMode(value as ThemeMode)} options={[{ value: 'dark', label: t("Night") }, { value: 'light', label: t("Day") }]} /></div>{appTheme.error && <p role='alert'>{t(appTheme.error)}<button onClick={() => setThemeMode(appTheme.mode)}>{t("Retry theme save")}</button></p>}</section>
-    <section><label><span>{t("Liquid glass")}</span><input type='checkbox' aria-label={t("Liquid glass")} checked={surface.glass} onChange={e => void setGlassSurface(e.target.checked)} /></label>
-      {surface.error && <p role='alert'>{t(surface.error)}<button onClick={() => void setGlassSurface(surface.glass)}>{t("Retry save")}</button></p>}
-    </section>
-    <section><LocalFontPicker target='app' /></section>
-    <ListeningTimeSettings />
-    <DeepSeekSettings />
-    <AutoImportFolder />
-    <DesktopStorageSettings />
-    <NormalizationSettings />
-    <section><h3>{t("Lyric appearance")}</h3>
-      <VocalLabelsToggle />
-      <LocalFontPicker target='lyrics' />
-      <label>{t("Font size")}<span>{appearance.fontSize} {t("px")}</span><input aria-label={t("Lyric font size")} type='range' min={24} max={64} step={1} value={appearance.fontSize}
-        onChange={event => void update({ fontSize: Number(event.target.value) })} /></label>
-      <label>{t("Line spacing")}<span>{appearance.lineGap} {t("px")}</span><input aria-label={t("Lyric line spacing")} type='range' min={4} max={48} step={1} value={appearance.lineGap}
-        onChange={event => void update({ lineGap: Number(event.target.value) })} /></label>
-      <p>{t("Font size stays fixed. Long lines wrap when needed. Missing glyphs use local bold fallback fonts.")}</p>
-      <button className='lyrics-import-button' onClick={() => { void chooseLocalFont('lyrics', { kind: 'system' }); void update(defaultLyricsAppearance); }}>{t("Reset lyric appearance")}</button>
-      {error && <p role='alert'>{t(error)}<button onClick={() => void update(appearance)}>{t("Retry save")}</button></p>}
-    </section>
-    <section><h3>{t("Lyrics timing")}</h3><p className='settings-track-name'>{track?.name || t("No track selected")}</p>
-      {saved ? <LyricsTimingControls offsetMs={timing.offsetMs} onChange={value => void timing.update(value)} />
-        : <p>{t(lyricError || (loading ? 'Loading saved lyrics…' : 'Select a song with saved or embedded lyrics to adjust its timing.'))}</p>}
-      {timing.error && <p role='alert'>{t(timing.error)}<button onClick={() => void timing.update(timing.offsetMs)}>{t("Retry save")}</button></p>}
-    </section>
-  </div>;
+    <div hidden={tab !== 'Appearance'} className='settings-category'><header><h2>{t('Appearance')}</h2></header>
+      <section><h3>{t('Interface')}</h3><div className='settings-field'><span>{t('Language')}</span><AppSelect label={t('Interface language')} value={locale.language} onChange={value => void setLanguage(value as Language)} options={[{ value: 'en', label: 'English' }, { value: 'zh-CN', label: '简体中文' }]} /></div>
+        <div className='settings-field'><span>{t('Theme')}</span><AppSelect label={t('App theme')} value={theme.mode} onChange={value => setThemeMode(value as ThemeMode)} options={[{ value: 'dark', label: t('Night') }, { value: 'light', label: t('Day') }]} /></div>
+        <label><input type='checkbox' checked={surface.glass} onChange={e => void setGlassSurface(e.target.checked)} />{t('Liquid glass')}</label>
+        {(locale.error || theme.error || surface.error) && <p role='alert'>{t(locale.error || theme.error || surface.error)}</p>}
+      </section><section><LocalFontPicker target='app' /></section>
+    </div>
+    <div hidden={tab !== 'Lyrics'} className='settings-category'><header><h2>{t('Lyrics')}</h2></header><LyricAppearanceSettings />
+      <section><h3>{t('Lyrics timing')}</h3><p>{track?.name || t('No track selected')}</p>{saved ? <LyricsTimingControls offsetMs={timing.offsetMs} onChange={value => void timing.update(value)} /> : <p>{t('Select a song with saved or embedded lyrics to adjust its timing.')}</p>}{timing.error && <p role='alert'>{t(timing.error)}</p>}</section>
+    </div>
+    <div hidden={tab !== 'Playback'} className='settings-category'><header><h2>{t('Playback')}</h2></header><section><h3>{t('Volume')}</h3><VolumeControl /></section><AudioOutputSettings active={tab === 'Playback'} /><NormalizationSettings /><ListeningTimeSettings /></div>
+    <div hidden={tab !== 'Online services'} className='settings-category'><header><h2>{t('Online services')}</h2></header><SpotifySettings /><DeepSeekSettings /></div>
+    <div hidden={tab !== 'Storage'} className='settings-category'><header><h2>{t('Storage')}</h2></header><AutoImportFolder /><DesktopStorageSettings /></div>
+  </div></div>;
 }
-
 export function SettingsDrawer() {
-  const open = useAppSelector(state => state.ui.settingsOpen);
-  const ready = useAppSelector(state => state.library.ready);
-  const dispatch = useAppDispatch();
-  return <Drawer title={t("Settings")} open={open} placement='right' width={380} destroyOnHidden onClose={() => dispatch(uiActions.setSettingsOpen(false))}>
-    {open && (ready ? <SettingsContent /> : <p>{t("Loading local preferences…")}</p>)}
-  </Drawer>;
+  const open = useAppSelector(state => state.ui.settingsOpen), ready = useAppSelector(state => state.library.ready), appearance = useAppSelector(state => state.ui.lyricsAppearance), dispatch = useAppDispatch();
+  useEffect(() => { document.documentElement.style.setProperty('--translation-font-size', `${appearance.translationSize}px`); }, [appearance.translationSize]);
+  return <Modal title={t('Settings')} open={open} centered width={980} className='settings-window' footer={null} destroyOnHidden onCancel={() => dispatch(uiActions.setSettingsOpen(false))}>
+    {open && (ready ? <SettingsContent /> : <p>{t('Loading local preferences…')}</p>)}
+  </Modal>;
 }

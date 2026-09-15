@@ -68,7 +68,7 @@ test('interlude marks only gaps strictly over ten seconds without changing line 
   const lyrics = parseLrc('[00:00]First\n[00:10]Second\n[00:20.001]Third');
   const before = structuredClone(lyrics); assert.deepEqual([...interludeBefore(lyrics)], []); assert.deepEqual(lyrics, before);
   const overlap = { ...lyrics, format: 'ttml' as const, lines: [{ ...lyrics.lines[0], end: 30 }, { ...lyrics.lines[1], start: 12, end: 15 }, { ...lyrics.lines[2], start: 42, end: 45 }] };
-  assert.deepEqual([...interludeBefore(overlap)], [['lrc-2', { start: 30, end: 42 }]]);
+  assert.deepEqual([...interludeBefore(overlap)], [['lrc-2', { start: 30, end: 42, kind: 'middle' }]]);
   const explicit = parseLrc('[00:00]First\n[00:02]\n[00:15]Second');
-  assert.deepEqual([...interludeBefore(explicit)], [['lrc-2', { start: 2, end: 15 }]]);
+  assert.deepEqual([...interludeBefore(explicit)], [['lrc-2', { start: 2, end: 15, kind: 'middle' }]]);
 });

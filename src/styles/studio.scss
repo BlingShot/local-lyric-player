@@ -122,8 +122,8 @@
 .studio-inspector { flex-shrink: 0; max-height: 35vh; overflow: auto; margin-bottom: 12px; font-size: 12px; border-block: 1px solid #ffffff14; }
 .studio-inspector details { padding: 9px 0; }
 .studio-inspector summary, .studio-backgrounds summary { cursor: pointer; color: #b3b3b3; font-size: 13px; }
-.studio-inspector details > summary { transition: margin-bottom 300ms cubic-bezier(.22, 1, .36, 1); }
-.studio-inspector details[open] > summary { color: #fff; margin-bottom: 12px; }
+.studio-inspector details > summary { margin-bottom: 0; }
+.studio-inspector details[open] > summary { color: #fff; }
 .studio-inspector label { display: inline-flex; gap: 9px; margin: 7px 10px 7px 0; align-items: center; flex-wrap: wrap; }
 .studio-performer, .studio-section, .studio-detail-tools { display: flex; align-items: center; gap: 8px; margin: 10px 0; flex-wrap: wrap; }
 .studio-performer > input:first-child { flex: 1; min-width: 120px; }
@@ -256,9 +256,8 @@
 .studio-help-disclosure { margin-block: 12px; color: var(--studio-muted); font-size: 12px; flex-shrink: 0; }
 .studio-help-disclosure summary { cursor: pointer; width: fit-content; }
 .studio-help-disclosure .studio-help { margin-block: 8px; }
-.studio-page .studio-inspector { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; border: 0; margin-bottom: 16px; max-height: 30vh; scrollbar-width: none; }
-.studio-page .studio-inspector details { background: var(--studio-panel); border: 1px solid var(--studio-border); border-radius: 8px; padding: 10px 14px; min-width: 0; transition: grid-column 0s 300ms allow-discrete; }
-.studio-page .studio-inspector details[open] { grid-column: 1 / -1; transition-delay: 0s; }
+.studio-page .studio-inspector { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); align-items: start; gap: 8px; border: 0; margin-bottom: 16px; max-height: 30vh; scrollbar-width: none; overflow-anchor: none; }
+.studio-page .studio-inspector details { background: var(--studio-panel); border: 1px solid var(--studio-border); border-radius: 8px; padding: 10px 14px; min-width: 0; align-self: start; }
 .studio-page .studio-inspector summary { color: var(--studio-text); line-height: 1.5; }
 .studio-page .studio-inspector .studio-help { margin-block: 10px; }
 .studio-page .studio-inspector input:not([type=checkbox]):not([type=color]),

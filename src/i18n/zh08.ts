@@ -1,0 +1,38 @@
+export const zh08: Record<string, string> = {
+  'Appearance': '外观', 'Lyrics': '歌词', 'Playback': '播放', 'Online services': '在线服务', 'Storage': '存储',
+  'Lyric display': '歌词显示', 'Word-by-word highlighting': '逐词同步高亮', 'Performer left/right alignment': '按演唱者左右对齐',
+  'Show vocal labels': '显示演唱者标签', 'Translation font size': '翻译字号', 'Lyric font size': '歌词字号', 'Line spacing': '行间距',
+  'Font weight': '字重', 'Font width': '字宽', 'Letter spacing': '字间距', 'Italic': '斜体',
+  'Variable axes require a supporting font. Static fonts may use synthesized weight or width.': '可变字体轴需要字体支持；静态字体可能使用合成字重或字宽。',
+  'Recently played': '最近播放', 'Last played': '上次播放时间', 'Never played': '尚未播放', 'History and listening times': '播放历史与时间',
+  'Show playing song': '定位正在播放的歌曲', 'No recently played songs': '暂无最近播放', 'Play a song to start your listening history.': '播放歌曲后，这里会显示播放历史。',
+  'Studio volume': 'Studio 音量', 'Volume': '音量', 'Mute': '静音', 'Unmute': '取消静音',
+  'Playback device': '播放设备', 'Audio output': '音频输出', 'Refresh devices': '刷新设备', 'WASAPI exclusive mode': 'WASAPI 独占模式',
+  'Browser audio (system default)': '浏览器音频（系统默认）', 'WASAPI system default': 'WASAPI 系统默认设备',
+  'Previously selected device (unavailable)': '上次选择的设备（当前不可用）',
+  'Exclusive mode uses the native mpv audio backend and may prevent other apps from playing sound. Unsupported devices report an error instead of silently using shared mode.': '独占模式使用原生 mpv 音频后端，可能使其他应用无法播放声音。设备不支持时会报告错误，不会悄悄切回共享模式。',
+  'Native playback devices are available in the Windows desktop app.': '原生播放设备选项仅在 Windows 桌面应用中可用。',
+  'Switching playback device...': '正在切换播放设备…',
+  'Searching Spotify ISRC...': '正在查询 Spotify ISRC…', 'Searching AMLL TTML...': '正在搜索 AMLL 歌词…',
+  'Searching AMLL by title and artist...': '正在按歌名和歌手搜索 AMLL…', 'Downloading AMLL TTML...': '正在下载 AMLL TTML…',
+  'AMLL has no matching TTML. Using local lyrics.': 'AMLL 暂无匹配的 TTML，使用本地歌词。',
+  'AMLL has multiple recording matches. Using local lyrics.': 'AMLL 存在多个录音版本，暂时使用本地歌词。',
+  'Spotify lookup failed and AMLL title search found no match. Using local lyrics.': 'Spotify 查询失败，AMLL 歌名搜索未找到匹配，使用本地歌词。',
+  'AI translation': 'AI 翻译', 'AI lyric translation': 'AI 歌词翻译', 'Export image': '导出图片', 'Export lyric image': '导出歌词图片',
+  'Translate to': '目标语言', 'Translate lyrics': '翻译歌词', 'Image theme': '图片主题', 'Night': '夜色', 'Paper': '纸张',
+  'Include translations': '包含翻译', 'Choose lyric lines': '选择歌词行', 'Download PNG': '下载 PNG',
+};
+
+Object.assign(zh08, {
+  'Align lyrics by performer': '按演唱者左右对齐', 'Show performer labels': '显示演唱者标签',
+  'Weight': '字重', 'Width': '字宽', 'Application font weight': '应用字体字重', 'Lyric font weight': '歌词字体字重',
+  'Application font width': '应用字体字宽', 'Lyric font width': '歌词字体字宽', 'Application letter spacing': '应用字间距', 'Lyric letter spacing': '歌词字间距',
+  'Variable axes require a supporting font. Other fonts use available faces or browser synthesis.': '可变字体轴需要字体支持，其他字体使用已有字形或浏览器合成效果。',
+  'Make it yours': '你的个性设置', 'Interface': '界面', 'Every voice, every word': '每个声部，每个字词',
+  'Your sound': '你的声音', 'Optional connections': '可选连接', 'On this device': '保存在此设备', 'Day': '日间',
+  'Settings categories': '设置分类', 'Lyric typography': '歌词排版', 'Font size': '字号',
+  'Applies to the lyric page, sidebar lyrics, and Studio preview. Recording data is never changed.': '同时应用于歌词页面、右侧栏和 Studio 预览，不改变已录制的时间轴。',
+  'Skip instrumental break': '跳过间奏', 'Reset lyric appearance': '重置歌词外观',
+});
+
+Object.assign(zh08, { 'Your listening history': '你的播放历史', 'No recent plays yet': '暂无最近播放', 'Play a song to start your local history.': '播放歌曲后，这里会显示本地播放历史。' });

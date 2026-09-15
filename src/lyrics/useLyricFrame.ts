@@ -1,3 +1,4 @@
+import { useAppSelector } from '../store/store';
 import { useLayoutEffect, useMemo, useState } from 'react';
 import { readAudioClock, subscribeAudioClock, type AudioClock } from './audioClock';
 import { interludeBefore } from './interludes';
@@ -5,7 +6,8 @@ import { lineEnd, lyricFrame } from './timeline';
 import type { LyricDocument } from './types';
 
 export function useLyricFrame(document: LyricDocument, trackId: string, offsetMs: number) {
-  const interludes = useMemo(() => interludeBefore(document), [document]);
+  const duration = useAppSelector(state => state.player.currentId === trackId ? state.player.duration : 0);
+  const interludes = useMemo(() => interludeBefore(document, duration - offsetMs / 1000), [document, duration, offsetMs]);
   const boundaries = useMemo(() => [...new Set([
     ...document.lines.flatMap(line => [line.start, line.end ?? Infinity]),
     ...[...interludes.values()].flatMap(gap => [gap.start, gap.end]),

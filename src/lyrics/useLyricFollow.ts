@@ -80,6 +80,8 @@ export function useLyricFollow(targetId: string | undefined, fontKey: string, vi
     if (!visible) return;
     const media = matchMedia('(prefers-reduced-motion: reduce)');
     const update = () => { reduced.current = media.matches; if (reduced.current && followingRef.current) align(false); };
+    const typography = () => { if (followingRef.current) align(false, true); };
+    window.addEventListener('lyric-typography-updated', typography);
     update(); media.addEventListener('change', update);
     const container = viewport.current;
     let size = '', viewportSize = '';
@@ -108,7 +110,7 @@ export function useLyricFollow(targetId: string | undefined, fontKey: string, vi
       size = next; viewportSize = dimensions;
     });
     if (container) { observer.observe(container); if (container.firstElementChild) observer.observe(container.firstElementChild); }
-    return () => { observer.disconnect(); clearTimeout(settled); resizing.current = false; media.removeEventListener('change', update); stop(); };
+    return () => { window.removeEventListener('lyric-typography-updated', typography); observer.disconnect(); clearTimeout(settled); resizing.current = false; media.removeEventListener('change', update); stop(); };
   }, [visible, align, stop]);
   return { viewport, following, resume: () => setFollowing(true), browse: () => {
     entrance.current = { pending: false, active: false }; stop(); setFollowing(false);

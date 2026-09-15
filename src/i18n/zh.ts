@@ -1,5 +1,51 @@
+import { zh08 } from './zh08';
 ﻿// English source keys keep existing projects, metadata and lyrics independent of UI language.
 const pairs = `
+Spotify / AMLL lyrics|Spotify / AMLL 歌词
+Match local songs with Spotify ISRC, then prefer AMLL TTML. Only song title, artist and duration are sent; audio stays local.|通过 Spotify 的 ISRC 匹配本地歌曲，优先使用 AMLL TTML。仅发送歌名、歌手和时长，不上传音频。
+Spotify login is available in the desktop app.|Spotify 登录仅在桌面版中可用。
+Spotify Client ID|Spotify Client ID
+Register this exact Redirect URI in your Spotify app. No Client Secret is required.|请在 Spotify 应用后台添加下面完全一致的回调地址，无需填写 Client Secret。
+Waiting for Spotify authorization...|正在等待 Spotify 授权……
+Spotify connected|Spotify 已连接
+Spotify disconnected|Spotify 未连接
+Sign in with Spotify|登录 Spotify
+Cancel login|取消登录
+Disconnect Spotify|断开 Spotify
+Connect Spotify in Settings to search AMLL lyrics.|在设置中连接 Spotify，即可自动搜索 AMLL 歌词。
+Searching Spotify ISRC...|正在搜索 Spotify ISRC……
+No exact Spotify recording match. Using local lyrics.|未找到准确对应的 Spotify 录音版本，使用本地歌词。
+Searching AMLL TTML...|正在搜索 AMLL TTML……
+Downloading AMLL TTML...|正在下载 AMLL TTML……
+AMLL has no matching TTML. Using local lyrics.|AMLL 暂无匹配的 TTML，使用本地歌词。
+Search again|重新搜索
+AI translation|AI 翻译
+Export image|导出图片
+AI lyric translation|AI 歌词翻译
+Sends main and background lyric text to DeepSeek using your API settings. API usage may incur charges. Audio is not uploaded.|使用设置中的 API 将主唱和背景歌词文本发送至 DeepSeek，调用可能产生费用，不会上传音频。
+Translate to|翻译为
+Translate lyrics|翻译歌词
+Translating {0}/{1} lines...|正在翻译 {0}/{1} 行……
+Saving replaces translations in this language and embeds TTML in the library audio copy. Original word timings and other voices are retained.|保存时替换当前语言的译文，并将 TTML 写入歌曲库中的音频副本，保留逐词时间和其他声部。
+Writing translation...|正在写入译文……
+Save translation to song|将译文保存到歌曲
+Translation saved inside the library audio copy. The original file is unchanged.|译文已写入歌曲库中的音频副本，原始文件未改动。
+Export lyric image|导出歌词图片
+Select lyrics for a 1080 x 1080 PNG. Preview and download are identical.|选择歌词并导出 1080 × 1080 PNG，下载内容与预览完全一致。
+Image theme|图片主题
+Paper|纸张
+Include translations|包含译文
+Choose lyric lines|选择歌词行
+Download PNG|下载 PNG
+Square lyric image preview|方形歌词图片预览
+Skip instrumental break|跳过间奏
+Select at least one lyric line.|请至少选择一行歌词。
+Too much text for one square. Select fewer lines.|文字过多，请减少选择的歌词行数。
+
+Parallel voice recording|多声部同步录制
+Record voice {0}|录制声部 {0}
+Hold 1-9 to record voices independently; T records the selected voice.|按住 1-9 分别录制各声部，可同时按住多个键；T 录制当前选中的声部。
+Word recorded. This voice is ready for its next fragment.|已记录该词，此声部已准备录制下一个词。
 Language|语言
 Interface language|界面语言
 English|English
@@ -746,3 +792,5 @@ Saved font is unavailable. Choose it again or use the system default.|已保存�
 `;
 
 export const zh: Record<string, string> = Object.fromEntries(pairs.trim().split('\n').map(line => { const at = line.indexOf('|'); return [line.slice(0, at), line.slice(at + 1)]; }));
+
+Object.assign(zh, zh08);

@@ -1,7 +1,6 @@
 import { t } from '../../../../i18n';
 import { trackActivation } from '../../../LocalTracks/trackActivation';
 import { AppSelect } from '../../../Menu';
-import { Link } from 'react-router-dom';
 import { useMemo, useState } from 'react';
 import { LibraryIcon, LibraryCollapsedIcon } from '../../../Icons';
 import { ImportButton } from '../../../Import/ImportButton';
@@ -53,13 +52,6 @@ export function Library({ drawer = false, compact = false }: { drawer?: boolean;
         </button></TrackContextMenu>)}
       </div>}
       {!collapsed && <div className='offline-library-body'>
-        <Link to='/collection/tracks' className='library-card' onClick={() => dispatch(uiActions.closeLibraryDrawer())}>
-          <img src='/images/playlist.png' width={48} height={48} alt='' />
-          <div><strong>{t("Local tracks")}</strong><p className='offline-muted'>{count} {t("files")}</p></div>
-        </Link>
-        <Link to='/collection/albums' className='library-card' onClick={() => dispatch(uiActions.closeLibraryDrawer())}>
-          <img src='/images/playlist.png' width={48} height={48} alt='' /><div><strong>{t("Local albums")}</strong><p className='offline-muted'>{t("Albums from your music tags")}</p></div>
-        </Link>
         {!!count && <>
           <div className='offline-library-view'><span className='offline-sr-only'>{t("Library view")}</span>
             <AppSelect label={t("Library view")} value={view} onChange={setView} options={[{ value: 'saved', label: t("Saved tracks") }, { value: 'history', label: t("Recently played") }]} />

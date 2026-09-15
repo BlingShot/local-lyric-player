@@ -17,6 +17,10 @@ const publish = (patch: Partial<NormalizationState>) => {
 let audio: HTMLAudioElement | undefined, context: AudioContext | undefined, source: MediaElementAudioSourceNode | undefined, gain: GainNode | undefined;
 let currentId: string | null = null, records: LoudnessRecord[] = [], request = 0, disposed = false, unstore: (() => void) | undefined;
 let tracks = store.getState().library.tracks;
+let nativeMode = false;
+let meterUsers = 0, analyser: AnalyserNode | undefined;
+const meterSamples = new Float32Array(2048);
+export async function setNativeNormalizationMode(enabled: boolean) { nativeMode = enabled; if (enabled) { if (context?.state === 'running') await context.suspend(); } else await ensureGraph(); }
 let desiredGain = 1, scheduledGain: number | undefined, graphStarting: Promise<void> | undefined;
 function apply(immediate = false) {
   const record = records.find(r => r.trackId === currentId && r.kind === 'loudness');
@@ -35,9 +39,35 @@ function apply(immediate = false) {
       ? record ? 'Saved measurement is stale or unmeasurable. Playing without gain.' : `No ${state.settings.mode} analysis. Playing without gain.`
       : `Track gain${output.limited ? ' · limited by true peak' : ''}${gain ? '' : ' · ready for playback'}` });
 }
+function connectMeter() {
+  if (!meterUsers || !context || !source || analyser) return;
+  analyser = context.createAnalyser(); analyser.fftSize = meterSamples.length;
+  // A side branch only: never add a second audible connection to the output.
+  source.connect(analyser);
+}
+export function retainAudioMeter() {
+  meterUsers++;
+  void ensureGraph();
+  let released = false;
+  return () => {
+    if (released) return;
+    released = true; meterUsers = Math.max(0, meterUsers - 1);
+    if (!meterUsers && analyser) {
+      try { source?.disconnect(analyser); } catch { /* The player may already be disposed. */ }
+      analyser.disconnect(); analyser = undefined;
+    }
+  };
+}
+export function readAudioEnergy() {
+  if (nativeMode || !analyser || context?.state !== 'running' || !audio || audio.paused || audio.ended) return 0;
+  analyser.getFloatTimeDomainData(meterSamples);
+  let sum = 0;
+  for (const sample of meterSamples) sum += sample * sample;
+  return Math.min(1, Math.sqrt(sum / meterSamples.length));
+}
 async function ensureGraph(prepareOnly = false) {
-  if (disposed || !audio || (!prepareOnly && !state.settings.enabled && !source)) return;
-  if (source && context?.state === 'running') return;
+  if (nativeMode || disposed || !audio || (!prepareOnly && !state.settings.enabled && !source && !meterUsers)) return;
+  if (source && context?.state === 'running') { connectMeter(); return; }
   if (graphStarting) return graphStarting;
   graphStarting = (async () => {
     try {
@@ -46,15 +76,15 @@ async function ensureGraph(prepareOnly = false) {
       context ||= new AudioContext({ latencyHint: 'playback' });
       await context.resume();
       if (disposed || !audio || context.state !== 'running') return;
-      if (prepareOnly || (!state.settings.enabled && !source)) return;
+      if (prepareOnly || (!state.settings.enabled && !source && !meterUsers)) return;
       // Connect only after the context can output audio. Off/default playback never
-      // creates a graph. Once connected, disabling uses the same graph at unity.
+      // creates a graph unless visual metering is requested. Disabling keeps unity.
       if (!source) {
         gain = context.createGain(); gain.gain.value = desiredGain;
         source = context.createMediaElementSource(audio);
         source.connect(gain); gain.connect(context.destination);
       }
-      apply(true);
+      connectMeter(); apply(true);
     } catch (error) { publish({ error: `Audio output could not start: ${error instanceof Error ? error.message : 'Web Audio unavailable'}. Press Play to retry.` }); }
     finally { graphStarting = undefined; }
   })();
@@ -117,6 +147,7 @@ export function disposeNormalization() {
   disposed = true; request++; unstore?.();
   document.removeEventListener('pointerdown', gesture, true); document.removeEventListener('keydown', gesture, true);
   audio?.removeEventListener('play', gesture); window.removeEventListener('local-analysis-updated', analysisUpdated);
+  analyser?.disconnect(); analyser = undefined; meterUsers = 0;
   source?.disconnect(); gain?.disconnect(); void context?.close();
   context = undefined; gain = undefined; source = undefined; audio = undefined; currentId = null;
   scheduledGain = undefined;

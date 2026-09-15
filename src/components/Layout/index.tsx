@@ -1,3 +1,5 @@
+import { useLyricsImmersion } from '../../lyrics/useLyricsImmersion';
+import '../../styles/immersive-lyrics.css';
 import { t } from '../../i18n';
 import { useEffect, useLayoutEffect, useRef, useState, type ReactNode } from 'react';
 import { Drawer } from 'antd';
@@ -10,7 +12,7 @@ import { FileDetails } from '../LocalTracks/FileDetails';
 import { useAppDispatch, useAppSelector } from '../../store/store';
 import { uiActions } from '../../store/slices/offlineUi';
 import { exitLyricsFullscreen, resetLyricsFullscreen } from '../../lyrics/fullscreen';
-import { SettingsDrawer } from '../Settings';
+
 import { usePageEntrance } from '../usePageEntrance';
 
 function useViewport() {
@@ -33,6 +35,8 @@ export function AppLayout({ children }: { children: ReactNode }) {
   const mainRef = useRef<HTMLElement>(null);
   usePageEntrance(mainRef, location.pathname);
   const ui = useAppSelector(state => state.ui);
+  const playbackFailed = useAppSelector(state => !!state.player.error);
+  useLyricsImmersion(ui.lyricsFullscreen && location.pathname === '/lyrics', ui.settingsOpen || ui.queueOpen || ui.importOpen || playbackFailed);
   const { mobile, tablet } = useViewport();
   const compact = ui.libraryCollapsed;
   const libraryPanel = usePanelRef();
@@ -69,7 +73,7 @@ export function AppLayout({ children }: { children: ReactNode }) {
   const trackPage = ['/', '/collection/tracks', '/search'].includes(location.pathname) || location.pathname.startsWith('/album/');
   const main = <main ref={mainRef} className={`Main-section ${trackPage ? 'offline-fixed-track-page' : ''} ${location.pathname === '/lyrics' ? 'offline-lyrics-page' : ''}`} id='main-content'>{children}</main>;
   return (
-    <div className='offline-app' data-lyrics-fullscreen={ui.lyricsFullscreen || undefined} data-lyrics-motion={ui.lyricsMotion || undefined}>
+    <div className='offline-app' data-lyrics-fullscreen={ui.lyricsFullscreen || undefined} data-lyrics-immersive={ui.lyricsFullscreen && ui.lyricsImmersive || undefined} data-lyrics-motion={ui.lyricsMotion || undefined}>
       <a className='offline-skip-link' href='#main-content'>{t("Skip to tracks")}</a>
       <div className='main-container offline-shell'>
         <Navbar />
@@ -100,7 +104,7 @@ export function AppLayout({ children }: { children: ReactNode }) {
         </div>
       </div>
       <PlayingBar />
-      <SettingsDrawer />
+
       <Drawer title={t("Your library")} open={mobile && ui.libraryDrawerOpen && !ui.lyricsFullscreen} placement='left' width={300}
         onClose={() => dispatch(uiActions.closeLibraryDrawer())}><Library drawer /></Drawer>
       <Drawer title={t("File details")} open={tablet && ui.detailsOpen && !ui.lyricsFullscreen} placement='right' width={320}

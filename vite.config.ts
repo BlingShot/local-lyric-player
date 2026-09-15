@@ -9,7 +9,7 @@ export default defineConfig(({ command }) => ({
       transformIndexHtml() {
         // Only explicit lyric analysis can contact DeepSeek; media/assets stay local.
         const connections = command === 'serve'
-          ? "'self' ws://127.0.0.1:3000 ws://localhost:3000 https://api.deepseek.com" : "'self' https://api.deepseek.com";
+          ? "'self' ws://127.0.0.1:3000 ws://localhost:3000 https://api.deepseek.com https://api.amll.dev" : "'self' https://api.deepseek.com https://api.amll.dev";
         const scripts = command === 'serve' ? "'self' 'unsafe-inline'" : "'self'";
         return [{
           tag: 'meta',

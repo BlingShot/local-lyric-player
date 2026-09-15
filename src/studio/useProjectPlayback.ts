@@ -7,7 +7,7 @@ import { msText, type StudioProject } from './project';
 export function useStudioTimeline(project: StudioProject, duration: number) {
   return useMemo(() => studioTimeline(project.lines.map(l => {
     const b = lineBounds(project, l, Math.round(duration * 1000)); return { id: l.id, text: l.text, start: msText(b.start), end: msText(b.end) };
-  }), duration), [project.lines, project.boundaries, duration]);
+  }), duration, project.boundaries?.endMs == null ? undefined : project.boundaries.endMs / 1000), [project.lines, project.boundaries, duration]);
 }
 export function useProjectPlayback(project: StudioProject, duration: number, enabled: boolean, region: RefObject<HTMLDivElement | null>) {
   const timeline = useStudioTimeline(project, duration);

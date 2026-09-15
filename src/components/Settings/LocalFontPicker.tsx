@@ -1,3 +1,4 @@
+import { TypographyControls } from './TypographyControls';
 import { useRef, useState } from 'react';
 import { Modal } from 'antd';
 import { t } from '../../i18n';
@@ -21,6 +22,7 @@ export function LocalFontPicker({ target }: { target: FontTarget }) {
       <button className='lyrics-import-button' disabled={busy} onClick={() => file.current?.click()}>{t('Choose font file')}</button>
       <button className='analysis-text-button' disabled={busy || font.kind === 'system' && !font.error} onClick={() => void chooseLocalFont(target, { kind: 'system' })}>{t('System default')}</button>
     </div>
+    <TypographyControls target={target} />
     <input ref={file} hidden type='file' accept='.ttf,.otf,.woff,.woff2' aria-label={t(`${title} file`)} onChange={async event => {
       const selected = event.target.files?.[0]; event.target.value = ''; if (!selected) return;
       setError(''); setImporting(true);

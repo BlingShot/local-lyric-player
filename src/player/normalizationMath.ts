@@ -18,3 +18,10 @@ export function normalizationGain(settings: NormalizationSettings, measured?: { 
   const db = settings.preventClipping ? Math.min(requested, ceiling) : requested;
   return { db, linear: 10 ** (db / 20), limited: db < requested - .001 };
 }
+
+/** mpv applies (volume / 100)^3, unlike the browser's linear gain. */
+export function nativeVolumePercent(volume: number, gainDb: number) {
+  if (!Number.isFinite(volume) || volume <= 0) return 0;
+  const linear = Math.min(1, volume) * 10 ** ((Number.isFinite(gainDb) ? gainDb : 0) / 20);
+  return Math.min(1000, 100 * Math.cbrt(linear));
+}

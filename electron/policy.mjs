@@ -17,6 +17,7 @@ export function allowedRequest(value, devUrl) {
   if (value.startsWith('blob:localmusic://app/') || value.startsWith('data:')) return true;
   if (devUrl && (value.startsWith(`blob:${devUrl}`) || value.startsWith(devUrl.replace('http:', 'ws:')))) return true;
   // Existing opt-in lyric analysis is the only remote application request.
+  try { const url = new URL(value); if (url.origin === 'https://api.amll.dev' && ['/v1/lyrics/get', '/v1/lyrics/search'].includes(url.pathname) && !url.username && !url.password) return true; } catch {}
   return value === 'https://api.deepseek.com/chat/completions';
 }
 
@@ -32,7 +33,7 @@ export function assetPath(value, root) {
 }
 
 export function isPagePath(value) {
-  return /^\/(?:index\.html|studio|lyrics|search|collection\/(?:tracks|albums)|album\/[^/]+|analyze\/[^/]+)?\/?$/.test(new URL(value).pathname);
+  return /^\/(?:index\.html|studio|lyrics|search|collection\/(?:tracks|albums|recent)|album\/[^/]+|analyze\/[^/]+)?\/?$/.test(new URL(value).pathname);
 }
 
 export function allowedPermission(permission, details = {}) {

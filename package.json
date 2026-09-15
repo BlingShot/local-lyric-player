@@ -1,10 +1,6 @@
 {
   "name": "lyric-player",
-<<<<<<< HEAD
-  "version": "0.7.2",
-=======
-  "version": "0.7.3",
->>>>>>> 55ae239b (Update App version)
+  "version": "0.8.0",
   "private": true,
   "type": "module",
   "scripts": {
@@ -40,7 +36,9 @@
     "desktop:prepare": "install-electron --no && npm run build && node scripts/prepare-desktop.mjs",
     "test:desktop-settings": "node scripts/test-desktop-settings.mjs",
     "test:sync": "node scripts/test-sync-localization.mjs",
-    "test:fonts": "node --test tests/desktop-fonts.test.mjs tests/desktop-policy.test.mjs"
+    "test:fonts": "node --test tests/desktop-fonts.test.mjs tests/desktop-policy.test.mjs",
+    "test:v08": "node scripts/test-v08.mjs",
+    "test:native-audio": "node scripts/test-native-audio.mjs"
   },
   "engines": {
     "node": ">=22.13.0"

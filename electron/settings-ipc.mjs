@@ -1,3 +1,6 @@
+import { registerNativeAudio } from './native-audio-ipc.mjs';
+import { shell } from 'electron';
+import { SpotifyService } from './spotify.mjs';
 import { ipcMain, dialog } from 'electron';
 import { isAppUrl } from './policy.mjs';
 import { DesktopFonts } from './font-store.mjs';
@@ -8,7 +11,14 @@ export function registerSettingsIpc(win, config, folders, devUrl) {
     if (event.sender !== win.webContents || event.senderFrame !== win.webContents.mainFrame || !isAppUrl(event.senderFrame.url, devUrl)) throw new Error('Untrusted settings request.');
     return fn(...args);
   });
-  const allowed = new Set(['deepseek', 'theme', 'surface', 'language', 'playback', 'lyrics-appearance', 'track-columns', 'normalization']);
+  registerNativeAudio(win, config, handle);
+  const spotify = new SpotifyService(config, url => shell.openExternal(url));
+  handle('spotify:info', () => spotify.info());
+  handle('spotify:login', clientId => spotify.login(clientId));
+  handle('spotify:logout', () => spotify.logout());
+  handle('spotify:match', track => spotify.match(track));
+  win.on('closed', () => spotify.cancel());
+  const allowed = new Set(['deepseek', 'theme', 'surface', 'language', 'playback', 'lyrics-appearance', 'track-columns', 'normalization', 'typography', 'audio-output']);
   handle('desktop-font:get', slot => fonts.get(slot));
   handle('desktop-font:set', (slot, value) => fonts.set(slot, value));
   handle('desktop-window:zoom', direction => {

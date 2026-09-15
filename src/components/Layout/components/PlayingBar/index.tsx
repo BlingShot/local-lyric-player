@@ -23,7 +23,7 @@ export default function PlayingBar() {
   const player = useAppSelector(({ player: p }) => ({ currentId: p.currentId, queue: p.queue, status: p.status, volume: p.volume, repeat: p.repeat, error: p.error }), shallowEqual);
   const track = useAppSelector(state => state.library.tracks.find(item => item.id === state.player.currentId));
   const failedTrack = useAppSelector(state => state.library.tracks.find(item => item.id === state.player.error?.trackId));
-  const { detailsOpen, queueOpen } = useAppSelector(state => state.ui);
+  const { detailsOpen, queueOpen, lyricsImmersive } = useAppSelector(state => state.ui);
   const playing = player.status === 'playing' || player.status === 'loading';
   const queueIndex = player.currentId ? player.queue.indexOf(player.currentId) : -1;
   const canNext = player.queue.length > 0 && (queueIndex < player.queue.length - 1 || player.repeat === 'all');
@@ -33,7 +33,7 @@ export default function PlayingBar() {
         <span>{failedTrack?.name ? `“${failedTrack.name}”：` : ''}{t(player.error.message)}</span>
         <button aria-label={t("Dismiss playback error")} onClick={() => getLocalPlayer().dismissError()}>×</button>
       </div>}
-      <footer className='offline-playing-bar' aria-label={t("Player")}>
+      <footer className='offline-playing-bar' aria-label={t("Player")} inert={lyricsImmersive || undefined} aria-hidden={lyricsImmersive || undefined}>
         <div className='offline-song-details'>
           <img className='album-cover' src={trackCover(track)} alt='' width={56} height={56} />
           <div><p className='song-title'>{track?.name ?? t("No track selected")}</p>

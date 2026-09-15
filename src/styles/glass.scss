@@ -64,6 +64,13 @@
   .offline-app .white-button, .offline-app .player-pause-button, .studio-page .studio-format-tabs button[aria-pressed=true] { background: #22384e; color: #fff; }
   .studio-row-head { background: #eef5fa; }
 }
+/* Fade the scrolling text over one continuous cover, without rectangular overlays. */
+[data-glass=true] .offline-app[data-lyrics-fullscreen] {
+  position: fixed;
+  .Main-section { background: transparent; box-shadow: none; clip-path: none; backdrop-filter: none; border-radius: 0; }
+  .lyrics-reader::before, .lyrics-reader::after { content: none; }
+  .lyrics-scroll { mask-image: linear-gradient(to bottom, transparent, #000 clamp(44px, 8vh, 96px), #000 calc(100% - clamp(44px, 8vh, 96px)), transparent); mask-repeat: no-repeat; }
+}
 /* The sidebar keeps a dark cover-derived lyric surface in both app themes. */
 [data-theme=light][data-glass=true] .offline-app .mini-lyrics .lyric-performer { color: #ffffff8c; }
 [data-theme=light][data-glass=true] .offline-app .mini-lyrics .lyric-annotation { color: #ffffffa0; }

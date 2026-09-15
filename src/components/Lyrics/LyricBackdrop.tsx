@@ -1,10 +1,15 @@
+import { useRef } from 'react';
+import { useMusicPulse } from '../../lyrics/useMusicPulse';
 import { useSurface } from '../../theme/surface';
 
-/** Share the same static, cover-derived glass across page, fullscreen and sidebar. */
-export function LyricBackdrop({ coverUrl }: { coverUrl?: string }) {
+/** The cover stays static; optional audio energy paints a separate, dim layer. */
+export function LyricBackdrop({ coverUrl, reactive = false }: { coverUrl?: string; reactive?: boolean }) {
   const { glass } = useSurface();
-  if (!glass) return null;
-  return <div className='lyric-backdrop' aria-hidden='true'>
+  const pulse = useRef<HTMLDivElement>(null);
+  useMusicPulse(pulse, reactive);
+  return <>{glass && <div className='lyric-backdrop' aria-hidden='true'>
     {coverUrl && <img src={coverUrl} alt='' decoding='async' draggable={false} />}
-  </div>;
+  </div>}
+    {reactive && <div ref={pulse} className='lyric-music-pulse' aria-hidden='true' />}
+  </>;
 }

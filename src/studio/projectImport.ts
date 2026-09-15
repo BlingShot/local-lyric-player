@@ -102,6 +102,13 @@ export function importProjectTtml(source: string, trackId: string, fileName: str
       if (role && !['lyrics', 'x-lead'].includes(role)) throw new Error(`Unsupported vocal role: ${role}.`);
       // Inline timing is inherited through wrappers and mixed text, not only leaves.
       const childTimed = timed || ['begin', 'end', 'dur'].some(name => attr(child, name) !== null);
+      // x-lead is a voice envelope, not a sung word. Keep the paragraph identity
+      // for its backing children and do not invent word times from this wrapper.
+      if (role === 'x-lead') {
+        line.performerId = childPerformer; line.startMs = cb.start; line.endMs = cb.end;
+        readVocal(child, cb, line, childPerformer, depth + 1, false, onNewLeadLine, vocalContainer);
+        continue;
+      }
       const separate = childPerformer !== line.performerId;
       if (separate) {
         const split = vocalLine('', line.role, line.parentId);

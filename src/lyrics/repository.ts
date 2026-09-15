@@ -14,7 +14,7 @@ export async function readLyrics(trackId: string): Promise<SavedLyrics | undefin
   return record;
 }
 
-export async function saveLyrics(record: SavedLyrics) {
+export async function saveLyrics(record: SavedLyrics, expected?: { source?: string; savedAt?: number }) {
   const db = await openLibraryDatabase();
   // Check track membership and save in the same transaction, including concurrent removal.
   await new Promise<void>((resolve, reject) => {
@@ -26,7 +26,15 @@ export async function saveLyrics(record: SavedLyrics) {
     const request = tx.objectStore('tracks').getKey(record.trackId);
     request.onsuccess = () => {
       if (request.result === undefined) { failure = new LyricsError('This track was removed. Select another track before importing lyrics.'); tx.abort(); return; }
-      try { tx.objectStore('lyrics').put(record, record.trackId); }
+      try {
+        if (expected) {
+          const current = tx.objectStore('lyrics').get(record.trackId);
+          current.onsuccess = () => {
+            if (current.result?.source !== expected.source || current.result?.savedAt !== expected.savedAt) { failure = new Error('Lyrics changed while downloading. The newer lyrics were kept.'); tx.abort(); return; }
+            tx.objectStore('lyrics').put(record, record.trackId);
+          };
+        } else tx.objectStore('lyrics').put(record, record.trackId);
+      }
       catch (error) { failure = error; tx.abort(); }
     };
   });

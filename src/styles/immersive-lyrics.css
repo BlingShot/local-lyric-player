@@ -1,0 +1,58 @@
+/* Fade chrome in place: the lyric viewport never changes height on idle. */
+.offline-app[data-lyrics-fullscreen] .lyrics-header-actions {
+  transition: opacity 280ms ease, transform 420ms cubic-bezier(.22,1,.36,1), visibility 0s;
+}
+.offline-app[data-lyrics-fullscreen] .offline-playing-bar {
+  transition: opacity 320ms ease, transform 480ms cubic-bezier(.22,1,.36,1), visibility 0s;
+}
+.offline-app[data-lyrics-fullscreen] .lyrics-resume {
+  transition: opacity 260ms ease, transform 360ms cubic-bezier(.22,1,.36,1), visibility 0s;
+}
+.offline-app[data-lyrics-fullscreen][data-lyrics-immersive],
+.offline-app[data-lyrics-fullscreen][data-lyrics-immersive] * { cursor: none !important; }
+.offline-app[data-lyrics-fullscreen][data-lyrics-immersive] .lyrics-header-actions {
+  opacity: 0; transform: translateY(-12px); visibility: hidden; pointer-events: none;
+  transition: opacity 280ms ease, transform 420ms cubic-bezier(.4,0,.2,1), visibility 0s 420ms;
+}
+.offline-app[data-lyrics-fullscreen][data-lyrics-immersive] .offline-playing-bar {
+  opacity: 0; transform: translateY(24px); visibility: hidden; pointer-events: none;
+  transition: opacity 320ms ease, transform 480ms cubic-bezier(.4,0,.2,1), visibility 0s 480ms;
+}
+.offline-app[data-lyrics-fullscreen][data-lyrics-immersive] .lyrics-resume {
+  opacity: 0; transform: translate(-50%, 10px); visibility: hidden; pointer-events: none;
+  transition: opacity 260ms ease, transform 360ms ease, visibility 0s 360ms;
+}
+.offline-app[data-lyrics-fullscreen] .lyrics-empty :is(button, .white-button, .lyrics-import-button) {
+  transition: opacity 280ms ease, visibility 0s;
+}
+.offline-app[data-lyrics-fullscreen][data-lyrics-immersive] :is(.lyrics-remote-notice, .lyrics-page-notice),
+.offline-app[data-lyrics-fullscreen][data-lyrics-immersive] .lyrics-empty :is(button, .white-button, .lyrics-import-button) {
+  opacity: 0; visibility: hidden; pointer-events: none; transition: opacity 280ms ease, visibility 0s 280ms;
+}
+.offline-app[data-lyrics-fullscreen][data-lyrics-immersive] .offline-skip-link { visibility: hidden; }
+.lyrics-header .lyrics-heading { display: flex; align-items: center; gap: 14px; min-width: 0; }
+.lyrics-header .lyrics-heading-copy { min-width: 0; }
+.lyrics-header .lyrics-heading h1 { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.offline-app[data-lyrics-fullscreen] .lyrics-heading-cover {
+  flex: 0 0 auto; width: 52px; height: 52px; margin: 0; object-fit: cover; border-radius: 7px;
+}
+.offline-app[data-lyrics-fullscreen] .lyrics-heading h1 { font-size: 17px; font-weight: 700; }
+.offline-app[data-lyrics-fullscreen] .lyrics-heading p { font-size: 12px; opacity: .8; }
+.offline-app .lyrics-page { position: relative; isolation: isolate; }
+.offline-app .lyrics-page > :not(.lyric-backdrop):not(.lyric-music-pulse) { position: relative; z-index: 1; }
+.offline-app .lyrics-page > .lyric-music-pulse {
+  position: absolute; inset: 0; z-index: 0; border-radius: inherit; pointer-events: none;
+  background: radial-gradient(ellipse at 27% 38%, #fff 0%, #ffffff70 32%, transparent 72%),
+    radial-gradient(ellipse at 80% 74%, #ffffff60 0%, transparent 64%);
+  opacity: calc(var(--music-pulse, 0) * .065); will-change: opacity; contain: strict;
+}
+@media (max-width: 767px) {
+  .offline-app[data-lyrics-fullscreen] .lyrics-heading-cover { width: 44px; height: 44px; }
+  .lyrics-header .lyrics-heading { gap: 10px; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .offline-app[data-lyrics-fullscreen] :is(.lyrics-header-actions, .offline-playing-bar, .lyrics-resume, .lyrics-remote-notice) {
+    transition: none !important; animation: none !important;
+  }
+  .offline-app .lyric-music-pulse { display: none; }
+}

@@ -1,6 +1,7 @@
 import { lineEnd, parseStudioTime, type StudioLine } from './model.ts';
+import { LYRIC_END } from './sync.ts';
 
-export function studioTimeline(lines: readonly StudioLine[], duration: number) {
+export function studioTimeline(lines: readonly StudioLine[], duration: number, lyricEnd?: number) {
   const intervals = lines.map((line, index) => ({ id: line.id, start: parseStudioTime(line.start), end: lineEnd(lines, index, duration), text: line.text }));
   const gaps = new Map<string, { start: number; end: number }>();
   let end = -Infinity;
@@ -8,9 +9,10 @@ export function studioTimeline(lines: readonly StudioLine[], duration: number) {
     if (Number.isFinite(end) && line.start! - end > 10) gaps.set(line.id, { start: end, end: line.start! });
     end = Math.max(end, line.end!);
   }
-  return { intervals, gaps };
+  return { intervals, gaps, lyricEnd };
 }
-export function studioTimelineFrame({ intervals, gaps }: ReturnType<typeof studioTimeline>, time: number) {
+export function studioTimelineFrame({ intervals, gaps, lyricEnd }: ReturnType<typeof studioTimeline>, time: number) {
+  if (lyricEnd !== undefined && Number.isFinite(lyricEnd) && time >= lyricEnd) return { activeIds: [LYRIC_END], gaps, interlude: undefined };
   const activeIds = intervals.filter(line => line.text.trim() && line.start !== undefined && line.end !== undefined && line.end > line.start && time >= line.start && time < line.end).map(line => line.id);
   const interlude = !activeIds.length ? [...gaps].find(([, gap]) => time >= gap.start && time < gap.end)?.[0] : undefined;
   return { activeIds, gaps, interlude };

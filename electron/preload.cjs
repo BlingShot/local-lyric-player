@@ -1,6 +1,16 @@
 // Electron requires CommonJS for a sandboxed preload. Expose only these fixed operations.
 const { contextBridge, ipcRenderer } = require('electron');
 contextBridge.exposeInMainWorld('localMusicDesktop', Object.freeze({
+  nativeAudioDevices: () => ipcRenderer.invoke('native-audio:devices'),
+  nativeAudioMeter: enabled => ipcRenderer.invoke('native-audio:meter', enabled),
+  nativeAudioEnergy: () => ipcRenderer.invoke('native-audio:energy'),
+  nativeAudioLoad: value => ipcRenderer.invoke('native-audio:load', value),
+  nativeAudioCommand: (command, value) => ipcRenderer.invoke('native-audio:command', command, value),
+  onNativeAudioState: callback => { const listener = (_event, value) => callback(value); ipcRenderer.on('native-audio:state', listener); return () => ipcRenderer.removeListener('native-audio:state', listener); },
+  spotifyInfo: () => ipcRenderer.invoke('spotify:info'),
+  spotifyLogin: clientId => ipcRenderer.invoke('spotify:login', clientId),
+  spotifyLogout: () => ipcRenderer.invoke('spotify:logout'),
+  spotifyMatch: track => ipcRenderer.invoke('spotify:match', track),
   zoom: direction => ipcRenderer.invoke('desktop-window:zoom', direction),
   getConfig: key => ipcRenderer.invoke('desktop-config:get', key),
   setConfig: (key, value) => ipcRenderer.invoke('desktop-config:set', key, value),
