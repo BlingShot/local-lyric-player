@@ -68,10 +68,24 @@ try {
     await geometry.screenshot({ path: `${output}/${mode}.png`, fullPage: true });
   }
   await call(geometry, 'renderGeometry', ['main', true]); await geometry.waitForTimeout(100);
-  const cells = await boxes(); assert.equal(cells.length, 3); assert.ok(cells.some(cell => cell.row === '1 / span 2'));
+  const cells = await boxes(); assert.equal(cells.length, 3); assert.deepEqual(cells.map(cell => cell.row), ['1 / span 1', '2 / span 1', '3 / span 1']);
+  await call(geometry, 'renderGeometry', ['main', false, true, true]); await geometry.waitForTimeout(100);
+  assert.deepEqual((await boxes()).map(cell => cell.column), ['1', '2', '2', '2', '1']);
+  for (const mode of ['main', 'sidebar', 'fullscreen']) {
+    await call(geometry, 'renderGeometry', [mode, true]); await geometry.waitForTimeout(150);
+    const vertical = await geometry.evaluate(() => {
+      const rects = selector => [...document.querySelectorAll(selector)].map(element => { const r = element.getBoundingClientRect(); return { top: r.top, bottom: r.bottom }; });
+      return { lyrics: rects('.lyric-vocal-group'), studio: rects('[data-preview-line]') };
+    });
+    for (const [surface, rows] of Object.entries(vertical)) {
+      assert.equal(rows.length, 3);
+      for (let i = 1; i < rows.length; i++) assert.ok(rows[i].top >= rows[i - 1].bottom - 1, `${mode}/${surface}: simultaneous lyrics overlap vertically`);
+    }
+    await geometry.screenshot({ path: `${output}/${mode}.png`, fullPage: true });
+  }
   await call(geometry, 'renderGeometry', ['main', false, false]); await geometry.waitForTimeout(100);
   assert.ok((await boxes()).every(cell => !cell.column));
-  checks.push('Shared LyricsView and Studio preview: stable lanes at three surface sizes, backwards seeks, chained row span, alignment off.');
+  checks.push('Shared LyricsView and Studio preview: stable lanes at three surface sizes, backwards seeks, distinct chronological rows, persistent performer columns including later solos/reversed duets, alignment off.');
   const native = await context.newPage(); await native.goto(origin + '/__regressions');
   checks.push({ nativeBridge: await call(native, 'repeatNativePlay') });
   await writeFile(`${output}/checks.json`, JSON.stringify(checks, null, 2));

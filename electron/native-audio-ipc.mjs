@@ -1,3 +1,4 @@
+import { audioResult } from './playback-errors.mjs';
 import { app } from 'electron';
 import { randomUUID } from 'node:crypto';
 import path from 'node:path';
@@ -30,8 +31,8 @@ export function registerNativeAudio(win, _config, handle) {
   handle('native-audio:devices', () => sweep.then(() => audio.devices()));
   handle('native-audio:meter', enabled => audio.setMeter(enabled));
   handle('native-audio:energy', () => audio.energy());
-  handle('native-audio:load', value => sweep.then(() => audio.load(value)));
-  handle('native-audio:command', (command, value) => audio.command(command, value));
-  win.webContents.on('did-start-navigation', (_event, _url, inPlace, mainFrame) => { if (mainFrame && !inPlace) void audio.command('stop').then(() => audio.setMeter(false)).catch(() => {}); });
+  handle('native-audio:load', value => audioResult(() => { if (!value?.context) throw new Error('Missing native load context.'); return audio.load(value); }));
+  handle('native-audio:command', (command, value, context) => audioResult(() => { if (!context) throw new Error('Missing native command context.'); return audio.command(command, value, context); }));
+  win.webContents.on('did-start-navigation', (_event, _url, inPlace, mainFrame) => { if (mainFrame && !inPlace) { audio.resetCommands(); void audio.command('stop').then(() => audio.setMeter(false)).catch(() => {}); } });
   win.on('closed', () => { void audio.dispose().catch(error => console.warn('Audio shutdown cleanup deferred:', error.message)); });
 }

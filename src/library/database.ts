@@ -1,4 +1,5 @@
-import type { LocalTrack } from './importFiles.ts';
+import { lyricRevision, revisedLyrics } from '../lyrics/revision.ts';
+import { trackFingerprint, type LocalTrack } from './importFiles.ts';
 import type { RepeatMode } from '../player/queue.ts';
 import type { SavedLyrics } from '../lyrics/types.ts';
 import { validLyricsAppearance, type LyricsAppearance } from '../lyrics/appearance.ts';
@@ -26,12 +27,20 @@ let connection: Promise<IDBDatabase> | undefined;
 export function openLibraryDatabase(): Promise<IDBDatabase> {
   if (connection) return connection;
   connection = new Promise<IDBDatabase>((resolve, reject) => {
-    const request = indexedDB.open(DATABASE_NAME, 4);
+    const request = indexedDB.open(DATABASE_NAME, 5);
     let blocked = false;
     request.onupgradeneeded = () => {
       for (const name of stores) {
         if (!request.result.objectStoreNames.contains(name)) request.result.createObjectStore(name);
       }
+      // Add a candidate fingerprint without changing any legacy primary/foreign key.
+      const cursorRequest = request.transaction!.objectStore('tracks').openCursor();
+      cursorRequest.onsuccess = () => {
+        const cursor = cursorRequest.result; if (!cursor) return;
+        const track = cursor.value as TrackRecord;
+        if (!track.dedupeFingerprint) cursor.update({ ...track, dedupeFingerprint: trackFingerprint(track) });
+        cursor.continue();
+      };
     };
     request.onblocked = () => { blocked = true; reject(new Error('Close other tabs of this player, then reload to open local storage.')); };
     request.onerror = () => reject(request.error);
@@ -95,7 +104,7 @@ export async function saveTracks(items: readonly SavedTrack[]) {
         const request = tx.objectStore('lyrics').getKey(item.track.id);
         request.onsuccess = () => {
           // Embedded discovery must never overwrite a manually imported lyric file.
-          try { if (request.result === undefined) tx.objectStore('lyrics').put(item.lyrics, item.track.id); }
+          try { if (request.result === undefined) tx.objectStore('lyrics').put(revisedLyrics(item.lyrics!), item.track.id); }
           catch (error) { writeFailure = error; tx.abort(); }
         };
       }
@@ -161,7 +170,7 @@ export async function patchExistingTracks(items: readonly TrackMutation[]): Prom
           if (item.lyrics) {
             const lyric = tx.objectStore('lyrics').getKey(item.id);
             lyric.onsuccess = () => {
-              try { if (lyric.result === undefined) tx.objectStore('lyrics').put(item.lyrics, item.id); }
+              try { if (lyric.result === undefined) tx.objectStore('lyrics').put(revisedLyrics(item.lyrics!), item.id); }
               catch (error) { abort(error); }
             };
           }
@@ -193,7 +202,7 @@ export async function deleteTrack(id: string) {
   await done;
 }
 
-export async function saveAudioLyricsCopy(expected: LocalTrack, audio: Blob, lyrics: SavedLyrics): Promise<TrackRecord> {
+export async function saveAudioLyricsCopy(expected: LocalTrack, audio: Blob, lyrics: SavedLyrics, expectedLyrics: string | null): Promise<TrackRecord> {
   const db = await openLibraryDatabase();
   return new Promise((resolve, reject) => {
     const tx = db.transaction(['tracks', 'audio', 'lyrics'], 'readwrite');
@@ -207,12 +216,22 @@ export async function saveAudioLyricsCopy(expected: LocalTrack, audio: Blob, lyr
         const latest = request.result as TrackRecord | undefined;
         if (!latest || latest.audioRevision !== expected.audioRevision || latest.lyricsWrittenAt !== expected.lyricsWrittenAt)
           throw new Error('This audio changed or was removed in another window. Reopen the song before writing lyrics.');
-        updated = { ...latest, size: audio.size, originalSize: latest.originalSize ?? latest.size,
-          audioRevision: latest.audioRevision ?? JSON.stringify([latest.id, latest.size, latest.lastModified, latest.addedAt]),
-          lyricsWrittenAt: crypto.randomUUID(), embeddedLyricsChecked: true, lyricsWarning: undefined };
-        tx.objectStore('audio').put(audio, latest.id);
-        tx.objectStore('tracks').put(updated, latest.id);
-        tx.objectStore('lyrics').put(lyrics, latest.id);
+        if (lyrics.trackId !== latest.id) throw new Error('Mismatched lyric identity.');
+        const current = tx.objectStore('lyrics').get(latest.id);
+        current.onsuccess = () => {
+          try {
+            if (lyricRevision(current.result) !== expectedLyrics)
+              throw new Error('Lyrics or timing offset changed while writing. The newer version was kept; retry with the current lyrics.');
+            updated = { ...latest, size: audio.size, originalSize: latest.originalSize ?? latest.size,
+              audioRevision: latest.audioRevision ?? JSON.stringify([latest.id, latest.size, latest.lastModified, latest.addedAt]),
+              lyricsWrittenAt: crypto.randomUUID(), embeddedLyricsChecked: true, lyricsWarning: undefined };
+            tx.objectStore('audio').put(audio, latest.id);
+            tx.objectStore('tracks').put(updated, latest.id);
+            // The write-copy operation never edits the timing offset.
+            tx.objectStore('lyrics').put(revisedLyrics({ ...lyrics, offsetMs: current.result?.offsetMs }), latest.id);
+          } catch (error) { failure = error; tx.abort(); }
+        };
+
       } catch (error) { failure = error; tx.abort(); }
     };
   });

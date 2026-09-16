@@ -56,7 +56,7 @@ export class FolderImporter {
       if (++scan.count > 100000) throw new Error('More than 100,000 audio files. Choose a smaller folder.');
       const token = randomUUID(); scan.tokens.set(token, next.value);
       const { path: _path, ...metadata } = next.value;
-      files.push({ ...metadata, url: `localmusic://app/__folder/${id}/${token}` });
+      files.push({ ...metadata, relativePath: path.relative(scan.root, next.value.path).split(path.sep).join('/'), url: `localmusic://app/__folder/${id}/${token}` });
     }
     return { files, done: false };
   }

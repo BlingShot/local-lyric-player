@@ -83,7 +83,7 @@ export function LyricsView({ document, trackId, offsetMs = 0, fontKey = '', visi
       onKeyDown={event => { if (['ArrowDown', 'ArrowUp', 'PageDown', 'PageUp', 'Home', 'End'].includes(event.key)) browse(); }}>
       <ol className='lyrics-lines'>
         {scenes.map(scene => {
-          const duet = appearance.performerAlignment && scene.groups.length > 1;
+          const duet = appearance.performerAlignment && scene.groups.some(group => layout.get(group[0].id)?.split);
           return <Fragment key={scene.id}>
             {scene.groups.flatMap(group => group.filter(line => interludes.has(line.id)).map(line => <Interlude key={line.id} id={line.id} gap={interludes.get(line.id)!} active={activeInterlude === line.id} offsetMs={offsetMs} onSeek={seek} />))}
             <li className='lyric-scene' data-duet={duet || undefined}><div className='lyric-scene-columns'>

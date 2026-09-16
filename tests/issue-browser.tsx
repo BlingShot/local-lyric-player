@@ -52,12 +52,13 @@ export function ttmlRoundtrip(marked: boolean) {
 }
 
 let renderer: ReturnType<typeof createRoot> | undefined, clock = 0;
-export function renderGeometry(mode: 'main' | 'sidebar' | 'fullscreen', chain = false, alignment = true) {
+export function renderGeometry(mode: 'main' | 'sidebar' | 'fullscreen', chain = false, alignment = true, extended = false) {
   const audio = getLocalAudioElement();
   Object.defineProperties(audio, { currentTime: { configurable: true, get: () => clock }, duration: { configurable: true, get: () => 20 } });
   store.dispatch(playerActions.update({ ...initialPlaybackState, currentId: 'geometry', duration: 20 }));
   store.dispatch(uiActions.setLyricsAppearance({ ...store.getState().ui.lyricsAppearance, performerAlignment: alignment }));
   const specs: [string, string, number, number][] = chain ? [['a1', 'A', 1, 4], ['b', 'B', 3, 6], ['a2', 'A', 5, 8]] : [['a', 'A', 1, 4], ['b', 'B', 2, 6]];
+  if (extended) specs.push(['solo-b', 'B', 9, 10], ['b-later', 'B', 11, 14], ['a-later', 'A', 12, 15]);
   const document: LyricDocument = { format: 'ttml', timing: 'word', agents: { A: 'Alice', B: 'Bob' }, notices: [],
     lines: specs.map(([id, agent, start, end]) => ({ id, groupId: id, agent, start, end, role: 'lead',
       parts: [{ text: `${id} phrase stays in its lane`, start, end }], annotations: [{ text: 'Translation', kind: 'translation' }] })) };

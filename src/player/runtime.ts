@@ -1,10 +1,11 @@
+import { lyricRevision } from '../lyrics/revision';
 import { attachNativeAudio } from './nativeAudio';
 import { readLyrics } from '../lyrics/repository';
 import { store } from '../store/store';
 import { libraryActions } from '../store/slices/library';
 import { playerActions } from '../store/slices/player';
 import { uiActions } from '../store/slices/offlineUi';
-import { collectFiles, fileId, type LocalTrack } from '../library/importFiles';
+import { collectFiles, type LocalTrack } from '../library/importFiles';
 import { deleteTrack, readLibrary, saveSettings, saveTrackColumns, saveTracks, patchExistingTracks, saveAudioLyricsCopy, storageError,
   type PlaybackSettings, type SavedTrack, type TrackPatch, type TrackMutation } from '../library/database';
 import { readAudioTags, validateCover } from '../library/metadata';
@@ -244,10 +245,10 @@ function operation(label: string, work: () => Promise<void>): Promise<boolean> {
   return result;
 }
 
-export function importAudioFiles(files: readonly File[]) {
+export function importAudioFiles(files: readonly File[], onResolved?: (ids: readonly (string | undefined)[]) => void) {
   return operation('Reading tags and saving audio copies…', async () => {
-    const result = collectFiles(files, store.getState().library.tracks);
-    const originals = new Map(files.map(file => [fileId(file), file]));
+    const result = await collectFiles(files, store.getState().library.tracks, track => audioCopies.get(track.id));
+    const originals = result.originals;
     const saved: SavedTrack[] = [];
     const addedAt = Date.now();
     for (const [index, track] of result.tracks.entries()) {
@@ -266,9 +267,17 @@ export function importAudioFiles(files: readonly File[]) {
     store.dispatch(libraryActions.addTracks(tracks));
     // An explicit album queue stays scoped to that album while importing elsewhere.
     if (!contextIds) getLocalPlayer().addTracks(saved.map(item => ({ id: item.track.id, url: URL.createObjectURL(item.audio!) })));
+    onResolved?.(result.resolvedIds);
     const warnings = tracks.filter(track => track.tagWarning || track.lyricsWarning).length;
     store.dispatch(uiActions.setImportMessage(`Added ${tracks.length} files. Saved on this device. ${result.duplicates ? `Skipped ${result.duplicates} duplicate files. ` : ''}${result.rejected ? `Skipped ${result.rejected} empty or unsupported files. ` : ''}${warnings ? `${warnings} files have unreadable tags or artwork; see Edit details.` : ''}`));
   });
+}
+
+/** Select the actual created/matched identity rather than deriving it from file metadata. */
+export async function importStudioAudio(file: File): Promise<string | undefined> {
+  let id: string | undefined;
+  const success = await importAudioFiles([file], ids => { id = ids[0]; });
+  return success ? id : undefined;
 }
 
 function forgetRemovedTrack(id: string) {
@@ -293,22 +302,22 @@ export function removeAudioFile(id: string) {
   });
 }
 
-export async function writeLocalLyricsCopy(id: string, source: string, expected?: { source: string; savedAt: number }): Promise<Blob> {
+export async function writeLocalLyricsCopy(id: string, source: string, expected?: string | null): Promise<Blob> {
   let saved: Blob | undefined;
   const success = await operation('Writing lyrics to the saved audio copy…', async () => {
     const track = store.getState().library.tracks.find(item => item.id === id), original = audioCopies.get(id);
     if (!track || !original || track.unavailable) throw new Error('This audio copy is unavailable. Restore it before writing lyrics.');
     const before = await readLyrics(id);
-    if (expected && (before?.source !== expected.source || before?.savedAt !== expected.savedAt)) throw new Error('Lyrics changed during translation. No audio was overwritten.');
+    if (expected !== undefined && lyricRevision(before) !== expected) throw new Error('Lyrics changed during translation. No audio was overwritten.');
     const result = await writeAudioLyrics(original, track.fileName || track.name, source);
     // Re-read the actual new tag with the same reader used by the player before committing.
     const verified = await readAudioTags(new File([result], track.fileName || track.name, { type: result.type }), true);
     if (verified.lyrics?.source.trim() !== source.trim()) throw new Error('The written lyrics could not be verified. The saved audio copy is unchanged.');
     const record = embeddedRecord(id, track.fileName || track.name, verified.lyrics)!;
     const current = await readLyrics(id);
-    if (expected && (current?.source !== expected.source || current?.savedAt !== expected.savedAt)) throw new Error('Lyrics changed during translation. No audio was overwritten.');
+    if (lyricRevision(current) !== lyricRevision(before)) throw new Error('Lyrics changed during translation. No audio was overwritten.');
     if (before?.offsetMs !== undefined) record.offsetMs = before.offsetMs;
-    const updated = await saveAudioLyricsCopy(track, result, record);
+    const updated = await saveAudioLyricsCopy(track, result, record, lyricRevision(before));
     audioCopies.set(id, result);
     store.dispatch(libraryActions.updateTracks([{ ...track, ...updated }]));
     window.dispatchEvent(new CustomEvent('local-lyrics-updated', { detail: id }));

@@ -1,3 +1,4 @@
+import { playbackError, isMediaFailure, type PlaybackErrorInfo } from './playbackErrors.ts';
 import { adjacentTrack, shuffled, type RepeatMode } from './queue.ts';
 
 export interface PlaybackState {
@@ -9,7 +10,7 @@ export interface PlaybackState {
   volume: number;
   shuffle: boolean;
   repeat: RepeatMode;
-  error: { trackId: string; message: string } | null;
+  error: { trackId: string; message: string; kind?: PlaybackErrorInfo['kind'] } | null;
 }
 
 export const initialPlaybackState: PlaybackState = {
@@ -21,7 +22,7 @@ export type AudioPort = Pick<HTMLAudioElement,
   'src' | 'currentSrc' | 'currentTime' | 'duration' | 'volume' | 'paused' | 'ended' |
   'readyState' | 'error' | 'play' | 'pause' | 'load' | 'removeAttribute' |
   'addEventListener' | 'removeEventListener'
->;
+> & { playbackError?: PlaybackErrorInfo | null; backendKind?: 'browser' | 'native' };
 
 interface PlayerOptions {
   onChange: (state: PlaybackState) => void;
@@ -45,6 +46,7 @@ export class LocalAudioPlayer {
   private command = 0;
   private wantsPlayback = false;
   private disposed = false;
+  private restorePosition: number | undefined;
 
   constructor(audio: AudioPort, options: PlayerOptions) {
     this.audio = audio;
@@ -87,7 +89,9 @@ export class LocalAudioPlayer {
       }
     });
     this.listen('error', () => {
-      if (!this.isCurrentSource() || !audio.error) return;
+      if (!this.isCurrentSource()) return;
+      if (audio.playbackError) { this.handlePlaybackFault(audio.playbackError); return; }
+      if (!audio.error) return;
       this.fail(audio.error.code === 2
         ? 'Unable to read this audio. Please import the file again.'
         : 'This audio cannot be decoded. The file may be damaged or its format is not supported by your browser.');
@@ -120,6 +124,9 @@ export class LocalAudioPlayer {
     if (Number.isFinite(duration) && duration > 0) {
       this.update({ duration });
       this.options.onDuration(this.state.currentId!, duration);
+      if (this.restorePosition !== undefined) {
+        const position = this.restorePosition; this.restorePosition = undefined; this.seek(position);
+      }
     }
     if (!this.wantsPlayback) this.clearWatchdog();
   };
@@ -139,7 +146,8 @@ export class LocalAudioPlayer {
         // A backend can resume without another playing event. Require both
         // usable media and clock progress; paused/stalled media still times out.
         if (this.audio.currentTime > position && this.confirmPlaying(command)) return;
-        this.fail('Audio loading timed out. Import the file again or choose another track.');
+        if (this.audio.backendKind === 'native') this.handlePlaybackFault({ kind: 'timeout', message: 'Native playback timed out. Check the output and retry this song.' });
+        else this.fail('Audio loading timed out. Import the file again or choose another track.');
       }
     }, this.options.loadTimeoutMs ?? 15000);
   }
@@ -167,8 +175,12 @@ export class LocalAudioPlayer {
     const target = id ?? this.state.currentId ?? this.state.queue[0];
     if (!target) return;
     this.failed.delete(target);
+    const previousError = this.state.error;
     this.update({ error: null });
-    if (target !== this.state.currentId || this.state.status === 'error') this.loadTrack(target, true);
+    if (target !== this.state.currentId || this.state.status === 'error') {
+      const position = target === this.state.currentId && previousError?.kind && !isMediaFailure(previousError.kind) ? this.state.position : 0;
+      this.loadTrack(target, true, position);
+    }
     else {
       if (this.audio.ended) this.seek(0);
       this.resume();
@@ -182,17 +194,19 @@ export class LocalAudioPlayer {
     this.loadTrack(id, false);
   }
 
-  private loadTrack(id: string, autoplay: boolean) {
+  private loadTrack(id: string, autoplay: boolean, position = 0) {
     const url = this.sources.get(id);
     if (!url) return;
     this.command++;
     this.clearWatchdog();
     this.wantsPlayback = autoplay;
     this.audio.pause();
-    this.update({ currentId: id, duration: 0, position: 0, status: autoplay ? 'loading' : 'paused' });
+    this.restorePosition = position > 0 ? position : undefined;
+    this.update({ currentId: id, duration: 0, position, status: autoplay ? 'loading' : 'paused' });
     this.options.onSelect(id);
     this.audio.src = url;
     this.audio.load();
+    if (position > 0) { try { this.audio.currentTime = position; } catch { /* Retry after metadata. */ } }
     this.armWatchdog();
     if (autoplay) this.resume();
   }
@@ -200,7 +214,7 @@ export class LocalAudioPlayer {
   private confirmPlaying(command: number) {
     if (this.disposed || command !== this.command || !this.wantsPlayback ||
         !this.isCurrentSource() || this.audio.paused || this.audio.ended ||
-        this.audio.error || this.audio.readyState < 3) return false;
+        this.audio.error || this.audio.playbackError || this.audio.readyState < 3) return false;
     this.clearWatchdog();
     this.update({ status: 'playing' });
     return true;
@@ -210,7 +224,7 @@ export class LocalAudioPlayer {
     if (!this.state.currentId || this.disposed) return;
     // Repeated play is not a reload or a request to seek back to zero.
     if (this.state.status === 'playing' && this.isCurrentSource() &&
-        !this.audio.paused && !this.audio.ended && !this.audio.error) {
+        !this.audio.paused && !this.audio.ended && !this.audio.error && !this.audio.playbackError) {
       this.wantsPlayback = true;
       this.clearWatchdog();
       return;
@@ -225,6 +239,8 @@ export class LocalAudioPlayer {
       this.confirmPlaying(command);
     }, (error: unknown) => {
       if (this.disposed || command !== this.command) return;
+      const fault = playbackError(error);
+      if (fault) { this.handlePlaybackFault(fault); return; }
       const name = error instanceof Error ? error.name : '';
       if (name === 'NotAllowedError' || name === 'AbortError') {
         this.wantsPlayback = false;
@@ -304,6 +320,17 @@ export class LocalAudioPlayer {
   }
 
   dismissError() { this.update({ error: null }); }
+
+  private handlePlaybackFault(fault: PlaybackErrorInfo) {
+    if (fault.kind === 'cancelled') return;
+    if (isMediaFailure(fault.kind)) { this.fail(fault.message); return; }
+    const id = this.state.currentId; if (!id) return;
+    // Output/backend failures are not evidence about the song. Preserve its
+    // position and queue, and never add it to the failed-file set or auto-skip.
+    this.readPosition(); this.command++; this.wantsPlayback = false;
+    this.clearWatchdog(); this.audio.pause();
+    this.update({ status: 'error', error: { trackId: id, kind: fault.kind, message: fault.message } });
+  }
 
   private fail(message: string) {
     const id = this.state.currentId;

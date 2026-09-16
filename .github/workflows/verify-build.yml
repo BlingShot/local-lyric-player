@@ -57,6 +57,8 @@ jobs:
         run: npx playwright install chromium
       - name: Browser issue regressions
         run: node scripts/test-issue-regressions.mjs
+      - name: Round two playback and persistence regressions
+        run: node scripts/test-round2-regressions.mjs
       - name: Build Windows portable
         run: npm run desktop:build
       - uses: actions/upload-artifact@v4
@@ -75,6 +77,8 @@ jobs:
         if: always()
         with:
           name: Regression-report-${{ github.sha }}
-          path: test-results/issues-7-11/
+          path: |
+            test-results/issues-7-11/
+            test-results/issues-1-6/
           if-no-files-found: ignore
           retention-days: 14

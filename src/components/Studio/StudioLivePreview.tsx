@@ -90,7 +90,7 @@ export function StudioLivePreview({ project, durationMs, enabled, recordingWordI
     onWheel={follow.browse} onTouchStart={follow.browse} onKeyDown={e => { if (['ArrowUp', 'ArrowDown', 'PageUp', 'PageDown', 'Home', 'End'].includes(e.key)) { e.stopPropagation(); follow.browse(); } }}>
     <div className='studio-preview-lines'>
     {scenes.map(scene => {
-      const duet = appearance.performerAlignment && scene.groups.length > 1;
+      const duet = appearance.performerAlignment && scene.groups.some(group => layout.get(group[0].id)?.split);
       return <div className='studio-vocal-scene' data-duet={duet || undefined} key={scene.id}>
       {scene.groups.map(group => {
         const cell = scene.cells.get(group[0].groupId)!, side = layout.get(group[0].id)?.side;
