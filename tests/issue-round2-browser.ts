@@ -4,7 +4,7 @@ import { readLyrics, saveLyrics, saveLyricOffset } from '../src/lyrics/repositor
 import { lyricRevision } from '../src/lyrics/revision';
 import { readLyricFile } from '../src/lyrics/repository';
 import { readStudioDraft, saveStudioDraft, studioRecoveries } from '../src/studio/repository';
-import { newProject } from '../src/studio/project';
+import { newProject, editText } from '../src/studio/project';
 import { collectFiles, sameFileBytes } from '../src/library/importFiles';
 import { attachNativeAudio, configureNativeOutput } from '../src/player/nativeAudio';
 import { LocalAudioPlayer } from '../src/player/LocalAudioPlayer';
@@ -56,7 +56,7 @@ export async function collisionImportAndMigration() {
   return { databaseVersion: db.version, trackCount: restored.tracks.length, legacyIdPreserved: true, newId: result.resolvedIds[1] };
 }
 export async function draftSave(id: string, fail = false, quota = false) {
-  const project = newProject(id, id + '.wav'); project.updatedAt = Date.now(); project.lines[0].text = 'Unsaved ' + id;
+  const project = newProject(id, id + '.wav'); project.updatedAt = Date.now(); project.lines[0] = editText(project.lines[0], 'Unsaved ' + id);
   const put = IDBObjectStore.prototype.put, set = Storage.prototype.setItem;
   IDBObjectStore.prototype.put = function (...args: Parameters<IDBObjectStore['put']>) {
     const request = put.apply(this, args);
@@ -69,7 +69,7 @@ export async function draftSave(id: string, fail = false, quota = false) {
 }
 export function recoveries() { return studioRecoveries().map(entry => ({ trackId: entry.draft.trackId, text: entry.draft.lines[0].text })); }
 export function seedLegacyDraft() {
-  const project = newProject('legacy-draft', 'legacy.wav'); project.lines[0].text = 'Legacy recovery';
+  const project = newProject('legacy-draft', 'legacy.wav'); project.lines[0] = editText(project.lines[0], 'Legacy recovery');
   localStorage.setItem('lyric-studio-recovery', JSON.stringify(project));
 }
 export async function saveRestored(id: string) { const draft = await readStudioDraft(id); check(draft, 'No draft recovered'); await saveStudioDraft(draft!); }
