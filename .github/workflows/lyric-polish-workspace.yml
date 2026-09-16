@@ -1,0 +1,35 @@
+name: Lyric polish workspace
+on:
+  push:
+    branches: ['codex/lyric-polish-20260916']
+    paths: ['.github/workflows/lyric-polish-workspace.yml']
+permissions:
+  contents: read
+jobs:
+  workspace:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+      - run: npm ci
+      - run: npx playwright install chromium
+      - name: Pack isolated test dependencies
+        run: |
+          tar -czf test-dependencies.tar.gz node_modules
+          tar -czf test-browser.tar.gz -C "$HOME/.cache" ms-playwright
+      - uses: actions/upload-artifact@v4
+        with:
+          name: lyric-polish-test-dependencies
+          path: test-dependencies.tar.gz
+          retention-days: 1
+      - uses: actions/upload-artifact@v4
+        with:
+          name: lyric-polish-test-browser
+          path: test-browser.tar.gz
+          retention-days: 1
