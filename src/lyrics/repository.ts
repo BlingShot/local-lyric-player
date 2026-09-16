@@ -1,3 +1,4 @@
+import { lyricRevision, revisedLyrics } from './revision';
 import { openLibraryDatabase } from '../library/database';
 import { LYRICS_PARSER_VERSION, parseLyrics } from './parse';
 import { LyricsError, type SavedLyrics } from './types';
@@ -14,7 +15,7 @@ export async function readLyrics(trackId: string): Promise<SavedLyrics | undefin
   return record;
 }
 
-export async function saveLyrics(record: SavedLyrics, expected?: { source?: string; savedAt?: number }) {
+export async function saveLyrics(record: SavedLyrics, expected?: string | null) {
   const db = await openLibraryDatabase();
   // Check track membership and save in the same transaction, including concurrent removal.
   await new Promise<void>((resolve, reject) => {
@@ -27,13 +28,15 @@ export async function saveLyrics(record: SavedLyrics, expected?: { source?: stri
     request.onsuccess = () => {
       if (request.result === undefined) { failure = new LyricsError('This track was removed. Select another track before importing lyrics.'); tx.abort(); return; }
       try {
-        if (expected) {
+        if (expected !== undefined) {
           const current = tx.objectStore('lyrics').get(record.trackId);
           current.onsuccess = () => {
-            if (current.result?.source !== expected.source || current.result?.savedAt !== expected.savedAt) { failure = new Error('Lyrics changed while downloading. The newer lyrics were kept.'); tx.abort(); return; }
-            tx.objectStore('lyrics').put(record, record.trackId);
+            try {
+              if (lyricRevision(current.result) !== expected) throw new Error('Lyrics changed while downloading. The newer lyrics were kept.');
+              tx.objectStore('lyrics').put(revisedLyrics(record), record.trackId);
+            } catch (error) { failure = error; tx.abort(); }
           };
-        } else tx.objectStore('lyrics').put(record, record.trackId);
+        } else tx.objectStore('lyrics').put(revisedLyrics(record), record.trackId);
       }
       catch (error) { failure = error; tx.abort(); }
     };
@@ -63,7 +66,7 @@ export async function saveLyricOffset(trackId: string, offsetMs: number, savedAt
     request.onsuccess = () => {
       if (!request.result) { failure = new LyricsError('This track has no saved lyrics to adjust.'); tx.abort(); return; }
       if (savedAt !== undefined && request.result.savedAt !== savedAt) { failure = new LyricsError('The lyric file changed. Adjust timing for the current lyrics.'); tx.abort(); return; }
-      try { tx.objectStore('lyrics').put({ ...request.result, offsetMs: Math.round(offsetMs) }, trackId); }
+      try { tx.objectStore('lyrics').put(revisedLyrics({ ...request.result, offsetMs: Math.round(offsetMs) }), trackId); }
       catch (error) { failure = error; tx.abort(); }
     };
   });

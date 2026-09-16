@@ -1,3 +1,4 @@
+import { lyricRevision } from '../../lyrics/revision';
 import { AppSelect } from '../Menu';
 import { useEffect, useRef, useState } from 'react';
 import { Modal } from 'antd';
@@ -30,7 +31,7 @@ export function LyricTools({ saved, track }: { saved: SavedLyrics; track: LocalT
     try {
       const player = getLocalPlayer().getState(); const duration = track.duration || (player.currentId === track.id ? player.duration : 0);
       const source = serializeLyrics(result, duration, track);
-      await writeLocalLyricsCopy(track.id, source, { source: snapshot.current.source, savedAt: snapshot.current.savedAt });
+      await writeLocalLyricsCopy(track.id, source, lyricRevision(snapshot.current));
       setMessage('Translation saved inside the library audio copy. The original file is unchanged.'); setResult(undefined);
     } catch (e) { setError((e as Error).message); } finally { setWriting(false); }
   };

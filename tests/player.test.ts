@@ -217,3 +217,41 @@ test('F08 genuine stalled playback still fails within the watchdog deadline', as
     assert.deepEqual(failures, ['c']);
   } finally { player.dispose(); }
 });
+
+test('F05 device/backend errors retain song, queue and position without marking normal audio failed', async () => {
+  for (const kind of ['device-unavailable', 'device-exclusive-busy', 'backend-stopped', 'timeout'] as const) {
+    const { audio, player, failures } = setup();
+    try {
+      player.play('a'); audio.metadata(90); audio.currentTime = 27; audio.dispatchEvent(new Event('timeupdate'));
+      Object.defineProperty(audio, 'playbackError', { configurable: true, value: { kind, message: 'Output unavailable.' } });
+      audio.dispatchEvent(new Event('error'));
+      assert.equal(player.getState().currentId, 'a'); assert.equal(player.getState().position, 27);
+      assert.equal(player.getState().error?.kind, kind); assert.equal(audio.paused, true); assert.equal(failures.length, 0);
+      assert.deepEqual(player.getState().queue, ['a', 'b', 'c']);
+      Object.defineProperty(audio, 'playbackError', { configurable: true, value: null });
+      player.play(); audio.metadata(90); await Promise.resolve();
+      assert.equal(player.getState().currentId, 'a'); assert.equal(audio.currentTime, 27);
+    } finally { player.dispose(); }
+  }
+});
+test('F05 cancelled native operations stay quiet and genuine media faults still skip', () => {
+  const { audio, player, failures } = setup();
+  try {
+    player.play('a'); audio.metadata();
+    Object.defineProperty(audio, 'playbackError', { configurable: true, value: { kind: 'cancelled', message: 'Old request.' } });
+    audio.dispatchEvent(new Event('error'));
+    assert.equal(player.getState().status, 'playing'); assert.equal(failures.length, 0);
+    Object.defineProperty(audio, 'playbackError', { configurable: true, value: { kind: 'decode', message: 'Unsupported audio.' } });
+    audio.dispatchEvent(new Event('error')); assert.equal(player.getState().currentId, 'b'); assert.equal(failures.length, 1);
+  } finally { player.dispose(); }
+});
+
+test('F05 native watchdog timeout is a backend error, not a failed-file skip', async () => {
+  const { audio, player, failures } = setup(8);
+  Object.defineProperty(audio, 'backendKind', { value: 'native' });
+  audio.playResult = () => new Promise<void>(() => {});
+  try {
+    player.play('a'); await new Promise(resolve => setTimeout(resolve, 30));
+    assert.equal(player.getState().currentId, 'a'); assert.equal(player.getState().error?.kind, 'timeout'); assert.equal(failures.length, 0);
+  } finally { player.dispose(); }
+});

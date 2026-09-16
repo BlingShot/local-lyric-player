@@ -1,3 +1,4 @@
+import { lyricRevision } from './revision';
 import { parseLyrics, LYRICS_PARSER_VERSION } from './parse';
 import { readLyrics, saveLyrics } from './repository';
 import { exactMetadata, selectAmllRevision, type AmllEntry } from './amllMatch';
@@ -68,6 +69,6 @@ export async function resolveAmll(track: LocalTrack, signal: AbortSignal, status
   const document = parseLyrics(source, fileName); if (!document.lines.length) throw new Error('AMLL returned empty lyrics.');
   signal.throwIfAborted();
   await saveLyrics({ trackId: track.id, fileName, source, document, origin: 'amll', parserVersion: LYRICS_PARSER_VERSION, savedAt: Date.now(), offsetMs: before?.offsetMs,
-    remote: { isrc: match?.isrc || '', spotifyId: match?.id || '', authors: Array.isArray(data.authorUsernames) ? data.authorUsernames.filter(name => typeof name === 'string').slice(0, 50) : [] } }, { source: before?.source, savedAt: before?.savedAt });
+    remote: { isrc: match?.isrc || '', spotifyId: match?.id || '', authors: Array.isArray(data.authorUsernames) ? data.authorUsernames.filter(name => typeof name === 'string').slice(0, 50) : [] } }, lyricRevision(before));
   status('');
 }

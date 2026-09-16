@@ -5,7 +5,7 @@ contextBridge.exposeInMainWorld('localMusicDesktop', Object.freeze({
   nativeAudioMeter: enabled => ipcRenderer.invoke('native-audio:meter', enabled),
   nativeAudioEnergy: () => ipcRenderer.invoke('native-audio:energy'),
   nativeAudioLoad: value => ipcRenderer.invoke('native-audio:load', value),
-  nativeAudioCommand: (command, value) => ipcRenderer.invoke('native-audio:command', command, value),
+  nativeAudioCommand: (command, value, context) => ipcRenderer.invoke('native-audio:command', command, value, context),
   onNativeAudioState: callback => { const listener = (_event, value) => callback(value); ipcRenderer.on('native-audio:state', listener); return () => ipcRenderer.removeListener('native-audio:state', listener); },
   spotifyInfo: () => ipcRenderer.invoke('spotify:info'),
   spotifyLogin: clientId => ipcRenderer.invoke('spotify:login', clientId),

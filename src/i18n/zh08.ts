@@ -1,4 +1,6 @@
 export const zh08: Record<string, string> = {
+  'Unsaved recovery drafts': '未提交的恢复草稿', 'Restore draft': '恢复草稿', 'Discard recovery': '丢弃恢复副本',
+  'Discard this recovery copy? Export any needed work first.': '丢弃此恢复副本？请先导出仍需保留的内容。',
   'Appearance': '外观', 'Lyrics': '歌词', 'Playback': '播放', 'Online services': '在线服务', 'Storage': '存储',
   'Lyric display': '歌词显示', 'Word-by-word highlighting': '逐词同步高亮', 'Performer left/right alignment': '按演唱者左右对齐',
   'Show vocal labels': '显示演唱者标签', 'Translation font size': '翻译字号', 'Lyric font size': '歌词字号', 'Line spacing': '行间距',

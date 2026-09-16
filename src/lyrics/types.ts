@@ -20,6 +20,7 @@ export interface LyricDocument {
   notices: string[];
 }
 export interface SavedLyrics {
+  revision?: string;
   trackId: string;
   fileName: string;
   source: string;
