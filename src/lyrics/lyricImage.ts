@@ -1,12 +1,41 @@
 import type { LyricLine } from './types';
 
-export interface LyricImageOptions { lines: LyricLine[]; title: string; artist: string; family: string; translation: boolean; theme: 'night' | 'paper'; cover?: HTMLImageElement }
+export interface LyricImageTheme { id: string; name: string; background: [string, string]; text: string; secondary: string; border: string }
+export const LYRIC_IMAGE_THEMES: readonly LyricImageTheme[] = [
+  { id: 'night', name: 'Night', background: ['#132f28', '#090e13'], text: '#f1f6ec', secondary: '#b7c4b0', border: '#4a6657' },
+  { id: 'paper', name: 'Paper', background: ['#faf3df', '#d9e0cc'], text: '#242820', secondary: '#5e6957', border: '#9da48a' },
+  { id: 'midnight', name: 'Midnight', background: ['#263653', '#0c101f'], text: '#f2f3ff', secondary: '#bbc5df', border: '#536589' },
+  { id: 'dusk', name: 'Dusk', background: ['#603e55', '#201f38'], text: '#fff0e5', secondary: '#ddbdc6', border: '#95677c' },
+  { id: 'ocean', name: 'Ocean', background: ['#164651', '#09242d'], text: '#e7ffff', secondary: '#a9d4d7', border: '#4d838c' },
+  { id: 'rose', name: 'Rose', background: ['#f6e6e0', '#dfc9d8'], text: '#382731', secondary: '#755d6c', border: '#b59daa' },
+  { id: 'monochrome', name: 'Monochrome', background: ['#292929', '#101010'], text: '#fafafa', secondary: '#c1c1c1', border: '#626262' },
+];
+// Imported themes are data, never CSS, remote images, HTML, or executable code.
+export function parseLyricImageTheme(source: string): LyricImageTheme {
+  if (source.length > 16384) throw new Error('Theme files must be smaller than 16 KB.');
+  const value = JSON.parse(source);
+  const color = (v: unknown): v is string => typeof v === 'string' && /^#[0-9a-f]{6}$/i.test(v);
+  if (!value || typeof value !== 'object' || value.version !== 1 || typeof value.name !== 'string' || !value.name.trim() || value.name.length > 60 ||
+      !Array.isArray(value.background) || value.background.length !== 2 || !value.background.every(color) ||
+      !color(value.text) || !color(value.secondary) || !color(value.border)) throw new Error('Invalid image theme. Use the exported JSON template.');
+  return { id: 'custom', name: value.name.trim(), background: [value.background[0], value.background[1]], text: value.text, secondary: value.secondary, border: value.border };
+}
+export function lyricImageSelection(lines: readonly LyricLine[], time: number): string[] {
+  if (!lines.length) return [];
+  const current = lines.findIndex(line => line.role === 'lead' && line.start <= time && time < (line.end ?? Infinity));
+  const audible = current >= 0 ? current : lines.findIndex(line => line.start <= time && time < (line.end ?? Infinity));
+  const previous = lines.reduce((index, line, i) => line.start <= time ? i : index, -1);
+  const index = audible >= 0 ? audible : Math.max(0, previous);
+  return lines.slice(Math.max(0, index - 1), Math.min(lines.length, index + 2)).map(line => line.id);
+}
+export interface LyricImageOptions { lines: LyricLine[]; title: string; artist: string; family: string; translation: boolean; theme: string | LyricImageTheme; cover?: HTMLImageElement }
 export function drawLyricImage(canvas: HTMLCanvasElement, options: LyricImageOptions) {
   canvas.width = 1080; canvas.height = 1080;
   const ctx = canvas.getContext('2d'); if (!ctx) throw new Error('Image export is unavailable.');
-  const paper = options.theme === 'paper', color = paper ? '#242820' : '#f1f6ec', secondary = paper ? '#5e6957' : '#b7c4b0';
-  const gradient = ctx.createLinearGradient(0, 0, 1080, 1080); gradient.addColorStop(0, paper ? '#faf3df' : '#132f28'); gradient.addColorStop(1, paper ? '#d9e0cc' : '#090e13'); ctx.fillStyle = gradient; ctx.fillRect(0, 0, 1080, 1080);
-  ctx.strokeStyle = paper ? '#9da48a' : '#4a6657'; ctx.lineWidth = 1; ctx.strokeRect(40, 40, 1000, 1000);
+  const theme = typeof options.theme === 'string' ? LYRIC_IMAGE_THEMES.find(item => item.id === options.theme) || LYRIC_IMAGE_THEMES[0] : options.theme;
+  const color = theme.text, secondary = theme.secondary;
+  const gradient = ctx.createLinearGradient(0, 0, 1080, 1080); gradient.addColorStop(0, theme.background[0]); gradient.addColorStop(1, theme.background[1]); ctx.fillStyle = gradient; ctx.fillRect(0, 0, 1080, 1080);
+  ctx.strokeStyle = theme.border; ctx.lineWidth = 1; ctx.strokeRect(40, 40, 1000, 1000);
   const wrap = (text: string, width: number) => {
     const result: string[] = []; let line = '';
     for (const segment of new Intl.Segmenter(undefined, { granularity: 'word' }).segment(text.replace(/\r?\n/g, ' '))) {

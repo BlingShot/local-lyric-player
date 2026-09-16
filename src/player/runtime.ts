@@ -1,3 +1,4 @@
+import { diagnosticLog } from '../desktop/diagnostics';
 import { lyricRevision } from '../lyrics/revision';
 import { attachNativeAudio } from './nativeAudio';
 import { readLyrics } from '../lyrics/repository';
@@ -82,7 +83,7 @@ async function backfillDurations() {
   }
 }
 
-function report(error: unknown) { store.dispatch(libraryActions.setStorageError(storageError(error))); }
+function report(error: unknown) { diagnosticLog('error', 'library', error); store.dispatch(libraryActions.setStorageError(storageError(error))); }
 async function flushSettings() {
   if (savingSettings) return;
   savingSettings = true;

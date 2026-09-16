@@ -36,7 +36,7 @@ export function AppSelect({ value, options, onChange, disabled, label, className
   return <AppDropdown trigger={['click']} placement='bottomLeft' open={open} disabled={disabled} autoFocus
     onOpenChange={setOpen} menu={{ id, role: 'listbox', 'aria-label': label, selectable: true, selectedKeys: [value],
       items: options.map(option => ({ key: option.value, label: option.label, disabled: option.disabled, role: 'option', 'data-value': option.value, 'aria-selected': option.value === value })),
-      onClick: ({ key }) => { onChange(key); setOpen(false); trigger.current?.focus(); } }}>
+      onClick: ({ key }) => { onChange(key); setOpen(false); trigger.current?.focus({ preventScroll: true }); } }}>
     <button ref={trigger} type='button' className={`app-select ${className}`} disabled={disabled}
       role='combobox' aria-label={label} aria-haspopup='listbox' aria-controls={open ? id : undefined} aria-expanded={open}
       onKeyDown={event => { if (event.key === 'ArrowDown' || event.key === 'ArrowUp') { event.preventDefault(); setOpen(true); } }}>

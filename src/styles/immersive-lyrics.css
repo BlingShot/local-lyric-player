@@ -41,10 +41,12 @@
 .offline-app .lyrics-page { position: relative; isolation: isolate; }
 .offline-app .lyrics-page > :not(.lyric-backdrop):not(.lyric-music-pulse) { position: relative; z-index: 1; }
 .offline-app .lyrics-page > .lyric-music-pulse {
-  position: absolute; inset: 0; z-index: 0; border-radius: inherit; pointer-events: none;
+  position: absolute; inset: -8%; z-index: 0; border-radius: inherit; pointer-events: none;
   background: radial-gradient(ellipse at 27% 38%, #fff 0%, #ffffff70 32%, transparent 72%),
     radial-gradient(ellipse at 80% 74%, #ffffff60 0%, transparent 64%);
-  opacity: calc(var(--music-pulse, 0) * .065); will-change: opacity; contain: strict;
+  opacity: calc(var(--music-pulse, 0) * .16);
+  transform: translate3d(var(--music-x, 0%), var(--music-y, 0%), 0) scale(calc(1 + var(--music-pulse, 0) * .06));
+  will-change: opacity, transform; contain: strict;
 }
 @media (max-width: 767px) {
   .offline-app[data-lyrics-fullscreen] .lyrics-heading-cover { width: 44px; height: 44px; }
@@ -56,3 +58,6 @@
   }
   .offline-app .lyric-music-pulse { display: none; }
 }
+
+/* The cover is already blurred. Avoid a second moving backdrop sampling pass. */
+[data-glass=true] .offline-app[data-lyrics-fullscreen] .lyric-backdrop::after { backdrop-filter: none; box-shadow: none; }

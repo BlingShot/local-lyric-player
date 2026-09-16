@@ -10,7 +10,7 @@ export function useLyricFollow(targetId: string | undefined, fontKey: string, vi
   const reduced = useRef(matchMedia('(prefers-reduced-motion: reduce)').matches);
   const entrance = useRef({ pending: true, active: false });
   const resizing = useRef(false);
-  const motion = useRef({ frame: 0, target: 0, position: 0, velocity: 0, time: 0 });
+  const motion = useRef({ frame: 0, target: 0, position: 0, velocity: 0, time: 0, focus: undefined as string | undefined });
   const stop = useCallback(() => { cancelAnimationFrame(motion.current.frame); motion.current.frame = 0; motion.current.velocity = 0; }, []);
   const align = useCallback((smooth: boolean, reflow = false) => {
     if (!shown.current) return;
@@ -33,14 +33,14 @@ export function useLyricFollow(targetId: string | undefined, fontKey: string, vi
       state.position = top >= distance ? top - distance : Math.min(container.scrollHeight - container.clientHeight, top + distance);
       container.scrollTop = state.position;
       container.dataset.followReady = 'true';
-    } else if (reflow && entrance.current.active) {
-      // Preserve the remaining entrance distance as a sidebar opens or fullscreen
-      // changes the line wrapping; only the layout anchor moves, not the spring.
+    } else if (reflow && state.focus === focus.current) {
+      // Preserve the same lyric anchor when labels, translations or an interlude
+      // change height. Presentation changes must not restart the entrance spring.
       state.position += top - state.target;
       container.scrollTop = state.position;
       state.position = container.scrollTop;
     }
-    state.target = top;
+    state.target = top; state.focus = focus.current;
     if (reduced.current || (!entrance.current.active && (!smooth || resizing.current))) {
       entrance.current.active = false; stop(); state.position = top; container.scrollTop = top; return;
     }
@@ -75,7 +75,8 @@ export function useLyricFollow(targetId: string | undefined, fontKey: string, vi
     if (viewport.current) viewport.current.dataset.followReady = 'false';
     if (visible) { followingRef.current = true; setFollowing(true); align(true); }
   }, [visible, entranceKey, align, stop]);
-  useLayoutEffect(() => { if (following) align(true); }, [targetId, following, fontKey, align]);
+  useLayoutEffect(() => { if (followingRef.current) align(true, true); }, [fontKey, align]);
+  useLayoutEffect(() => { if (following) align(true); }, [targetId, following, align]);
   useLayoutEffect(() => {
     if (!visible) return;
     const media = matchMedia('(prefers-reduced-motion: reduce)');
@@ -96,9 +97,9 @@ export function useLyricFollow(targetId: string | undefined, fontKey: string, vi
       if (entrance.current.active || entrance.current.pending) {
         if (followingRef.current) align(true, true);
       } else if (size && dimensions === viewportSize) {
-        // Child vocals expand in place. Retarget the existing spring without
-        // snapping the parent on every frame of the height transition.
-        if (followingRef.current) align(true);
+        // Reclaiming interlude space and toggling labels must not drag the
+        // active lyric up and down while the same cue is being followed.
+        if (followingRef.current) align(true, true);
       } else if (size) {
         resizing.current = true; stop(); clearTimeout(settled);
         if (followingRef.current) align(false);

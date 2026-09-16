@@ -82,3 +82,27 @@ export function saveStudioDraft(value: StudioDraft): Promise<void> {
     window.dispatchEvent(new CustomEvent('local-studio-draft-updated', { detail: draft.trackId }));
   })();
 }
+
+// Source switches retain an immutable draft outside the transient recovery journal.
+// Ordinary autosaves must never clean these copies up.
+export interface StudioSourceBackup { key: string; project: StudioDraft }
+const backupPrefix = (trackId: string) => `lyric-studio-source-backup:${encodeURIComponent(trackId)}:`;
+export async function backupStudioSource(project: StudioDraft): Promise<void> {
+  const snapshot = structuredClone(project), db = await openLibraryDatabase();
+  await new Promise<void>((resolve, reject) => {
+    const tx = db.transaction('settings', 'readwrite'), store = tx.objectStore('settings');
+    const key = backupPrefix(project.trackId) + project.updatedAt;
+    const get = store.get(key);
+    get.onsuccess = () => { if (get.result === undefined) store.add(snapshot, key); };
+    tx.oncomplete = () => resolve(); tx.onabort = () => reject(tx.error || new Error('The previous draft could not be backed up.')); tx.onerror = () => {};
+  });
+}
+export async function studioSourceBackups(trackId: string): Promise<StudioSourceBackup[]> {
+  const db = await openLibraryDatabase(), prefix = backupPrefix(trackId);
+  return new Promise((resolve, reject) => {
+    const result: StudioSourceBackup[] = [], request = db.transaction('settings').objectStore('settings').openCursor(IDBKeyRange.bound(prefix, prefix + '\uffff'));
+    request.onsuccess = () => { const cursor = request.result; if (!cursor) { resolve(result.sort((a, b) => b.project.updatedAt - a.project.updatedAt)); return; }
+      if (isDraft(cursor.value) && cursor.value.trackId === trackId) result.push({ key: String(cursor.key), project: migrateDraft(cursor.value) }); cursor.continue(); };
+    request.onerror = () => reject(request.error);
+  });
+}

@@ -6,7 +6,6 @@ const smooth = (value: number) => { const x = Math.max(0, Math.min(1, value)); r
 export function wordVisualProgress(part: LyricPart, time: number): number | undefined {
   const raw = partProgress(part, time);
   if (raw === undefined || time <= part.start!) return raw;
-  const duration = part.end! - part.start!;
-  return duration < .18 ? smooth((time - part.start!) / .18) : raw;
+  return rapidWord(part) ? smooth((time - part.start!) / .18) : raw;
 }
-export const rapidWord = (part: LyricPart) => part.start !== undefined && part.end !== undefined && part.end > part.start && part.end - part.start < .18;
+export const rapidWord = (part: LyricPart) => !/\p{Script=Han}/u.test(part.text) && part.start !== undefined && part.end !== undefined && part.end > part.start && part.end - part.start < .18;

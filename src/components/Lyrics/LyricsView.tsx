@@ -15,8 +15,8 @@ import type { LyricDocument, LyricLine } from '../../lyrics/types';
 import { getLocalPlayer } from '../../player/runtime';
 import { useAppSelector } from '../../store/store';
 
-const LyricRow = memo(function LyricRow({ line, past, active, offsetMs, secondary, split, performer, agents, onSeek, showVocalLabels, wordByWord }: {
-  line: LyricLine; past: boolean; active: boolean; offsetMs: number; secondary: boolean; split: boolean; performer?: string; agents: Record<string, string>; onSeek: (time: number) => void; showVocalLabels: boolean; wordByWord: boolean;
+const LyricRow = memo(function LyricRow({ line, past, active, offsetMs, secondary, split, performer, agents, onSeek, showVocalLabels, wordByWord, showTranslations }: {
+  line: LyricLine; past: boolean; active: boolean; offsetMs: number; secondary: boolean; split: boolean; performer?: string; agents: Record<string, string>; onSeek: (time: number) => void; showVocalLabels: boolean; wordByWord: boolean; showTranslations: boolean;
 }) {
   useLanguage();
   const text = useRef<HTMLSpanElement>(null);
@@ -57,7 +57,7 @@ const LyricRow = memo(function LyricRow({ line, past, active, offsetMs, secondar
             style={progress === undefined ? undefined : { '--word-progress': `${progress * 100}%` } as CSSProperties}>{part.text}</span>;
         })}
       </span>
-      {line.annotations.map((annotation, index) => <span key={index} lang={annotation.language} dir='auto' className={`lyric-annotation lyric-${annotation.kind}`}>{annotation.text}</span>)}
+      {line.annotations.filter(annotation => showTranslations || annotation.kind !== 'translation').map((annotation, index) => <span key={index} lang={annotation.language} dir='auto' className={`lyric-annotation lyric-${annotation.kind}`}>{annotation.text}</span>)}
     </button></div>
   </li>;
 });
@@ -67,10 +67,10 @@ export function LyricsView({ document, trackId, offsetMs = 0, fontKey = '', visi
 }) {
   const appearance = useAppSelector(state => state.ui.lyricsAppearance);
   const { showVocalLabels } = appearance;
-  const { activeIds, pastIds, focusId, activeInterlude, interludes } = useLyricFrame(document, trackId, offsetMs);
+  const { activeIds, pastIds, focusId, activeInterlude, leavingInterlude, interludes } = useLyricFrame(document, trackId, offsetMs);
   const focusLine = document.lines.find(l => l.id === focusId);
-  const scrollTarget = activeInterlude ? `interlude:${activeInterlude}` : focusLine?.role === 'background' ? document.lines.find(l => l.groupId === focusLine.groupId && l.role === 'lead')?.id || focusId : focusId;
-  const { viewport, following, resume, browse } = useLyricFollow(scrollTarget, `${fontKey}:${appearance.translationSize}:${appearance.wordByWord}:${appearance.performerAlignment}`, visible, entranceKey);
+  const scrollTarget = leavingInterlude || (activeInterlude ? `interlude:${activeInterlude}` : focusLine?.role === 'background' ? document.lines.find(l => l.groupId === focusLine.groupId && l.role === 'lead')?.id || focusId : focusId);
+  const { viewport, following, resume, browse } = useLyricFollow(scrollTarget, `${fontKey}:${appearance.translationSize}:${appearance.wordByWord}:${appearance.performerAlignment}:${appearance.showVocalLabels}:${appearance.showTranslations}`, visible, entranceKey);
   const resumeRef = useRef(resume); resumeRef.current = resume;
   const seek = useCallback((position: number) => { resumeRef.current(); getLocalPlayer().seek(Math.max(0, position + offsetMs / 1000)); }, [offsetMs]);
   const layout = useMemo(() => vocalLayout(document.lines), [document.lines]);
@@ -90,7 +90,7 @@ export function LyricsView({ document, trackId, offsetMs = 0, fontKey = '', visi
               {scene.groups.map(group => {
                 const lane = lanes.get(group[0].id), side = lane?.side || 'left', cell = scene.cells.get(group[0].groupId)!;
                 return <ol key={group[0].groupId} className='lyric-vocal-group' style={duet ? { gridColumn: side === 'right' ? 2 : 1, gridRow: `${cell.row} / span ${cell.rowSpan}` } : undefined}>
-                  {group.map(line => <LyricRow key={line.id} line={line} agents={document.agents} onSeek={seek} active={activeIds.has(line.id)} showVocalLabels={showVocalLabels} wordByWord={appearance.wordByWord}
+                  {group.map(line => <LyricRow key={line.id} line={line} agents={document.agents} onSeek={seek} active={activeIds.has(line.id)} showVocalLabels={showVocalLabels} wordByWord={appearance.wordByWord} showTranslations={appearance.showTranslations !== false}
                     past={pastIds.has(line.id)} offsetMs={offsetMs} secondary={lanes.get(line.id)?.side === 'right'} split={duet}
                     performer={line.agent?.split(/\s+/).map(id => document.agents[id] || id).join(' + ')} />)}
                 </ol>;
@@ -98,7 +98,6 @@ export function LyricsView({ document, trackId, offsetMs = 0, fontKey = '', visi
             </div></li>
           </Fragment>;
         })}
-        {interludes.has('$outro') && <Interlude id='$outro' gap={interludes.get('$outro')!} active={activeInterlude === '$outro'} offsetMs={offsetMs} onSeek={seek} />}
       </ol>
     </div>
     {!following && <button className='lyrics-resume' onClick={resume}>{t("Resume following")}</button>}

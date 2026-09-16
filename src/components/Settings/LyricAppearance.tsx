@@ -6,7 +6,7 @@ import { LocalFontPicker } from './LocalFontPicker';
 
 export function LyricAppearanceSettings() {
   const { appearance, update, error } = useAppearance();
-  return <><section><h3>{t('Lyric display')}</h3><LyricDisplayControls /><p>{t('Applies to the lyric page, sidebar lyrics, and Studio preview. Recording data is never changed.')}</p></section>
+  return <><section><h3>{t('Lyric display')}</h3><LyricDisplayControls /></section>
     <section><h3>{t('Lyric typography')}</h3><LocalFontPicker target='lyrics' />
       <label className='settings-range'>{t('Font size')}<output>{appearance.fontSize} px</output><input aria-label={t('Lyric font size')} type='range' min={24} max={64} value={appearance.fontSize} onChange={e => update({ fontSize: Number(e.target.value) })} /></label>
       <label className='settings-range'>{t('Translation font size')}<output>{appearance.translationSize} px</output><input aria-label={t('Translation font size')} type='range' min={12} max={40} value={appearance.translationSize} onChange={e => update({ translationSize: Number(e.target.value) })} /></label>

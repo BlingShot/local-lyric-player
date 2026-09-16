@@ -29,6 +29,11 @@ declare global {
       getConfig<T>(key: string): Promise<T | undefined>;
       setConfig(key: string, value: unknown): Promise<void>;
       configPath(): Promise<string>;
+      writeLog(entry: { level: 'debug' | 'info' | 'warn' | 'error'; scope: string; message: string }): Promise<void>;
+      readLog(): Promise<string>;
+      logPath(): Promise<string>;
+      openLogFolder(): Promise<void>;
+      openDebugTools(): Promise<void>;
       getFont(slot: FontTarget): Promise<LocalFont>;
       setFont(slot: FontTarget, font: LocalFont): Promise<void>;
       importFolderInfo(): Promise<{ name: string; path: string } | null>;

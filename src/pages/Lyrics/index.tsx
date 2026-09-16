@@ -34,7 +34,7 @@ export function LyricsPage() {
   const [dropError, setDropError] = useState('');
   useEffect(() => { setImportFor(undefined); setDroppedFile(undefined); setDropError(''); }, [track?.id]);
   return <section className='lyrics-page' aria-label={t("Lyrics page")} style={{ '--lyrics-cover-color': color,
-    '--lyrics-font-max': `${appearance.fontSize}px`,
+    '--lyrics-font-max': `${appearance.fontSize}px`, '--lyric-translation-size': `${appearance.translationSize}px`,
     '--lyrics-font-scale': appearance.fontSize / 48, '--lyrics-line-gap': `${appearance.lineGap}px` } as CSSProperties}
     onDragEnter={event => event.stopPropagation()} onDragLeave={event => event.stopPropagation()}
     onDragOver={event => { event.preventDefault(); event.stopPropagation(); }}

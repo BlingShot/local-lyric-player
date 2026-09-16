@@ -5,7 +5,7 @@ import { sustainedGlow } from '../../lyrics/sustained';
 import type { SyncTarget } from '../../studio/useWordRecording';
 import { useLocalFonts } from '../../theme/fonts';
 import { t } from '../../i18n';
-import { Fragment, useEffect, useMemo, useState } from 'react';
+import { Fragment, useEffect, useMemo, useState, type CSSProperties } from 'react';
 import { subscribeAudioClock } from '../../lyrics/audioClock';
 import { useLyricFollow } from '../../lyrics/useLyricFollow';
 import { getLocalPlayer } from '../../player/runtime';
@@ -29,7 +29,7 @@ export function StudioLivePreview({ project, durationMs, enabled, recordingWordI
   const layout = useMemo(() => vocalLayout(score), [score]);
   const scenes = useMemo(() => vocalScenes(score).map(scene => ({ ...scene, cells: vocalSceneRows(scene.groups, layout) })), [score, layout]);
   const [focusId, setFocusId] = useState<string>();
-  const follow = useLyricFollow(focusId, `${fonts.lyrics.family}:${appearance.translationSize}:${appearance.performerAlignment}`, true, project.trackId);
+  const follow = useLyricFollow(focusId, `${fonts.lyrics.family}:${appearance.translationSize}:${appearance.performerAlignment}:${appearance.showVocalLabels}:${appearance.showTranslations}`, true, project.trackId);
   useEffect(() => {
     const root = follow.viewport.current; if (!root) return;
     const rows = project.lines.map(l => ({ line: l, phase: '', bounds: lineBounds(project, l, durationMs), node: root.querySelector<HTMLElement>(`[data-preview-line="${CSS.escape(l.id)}"]`), words: l.units.map(w => ({ w, node: root.querySelector<HTMLElement>(`[data-preview-word="${CSS.escape(w.id)}"]`) })) }));
@@ -86,7 +86,7 @@ export function StudioLivePreview({ project, durationMs, enabled, recordingWordI
       if (target !== previousFocus) { previousFocus = target; setFocusId(target); }
     });
   }, [project.lines, project.boundaries, project.selectedId, durationMs, enabled, timeline, recordingWordIds, appearance.wordByWord, appearance.performerAlignment, layout, syncTarget]);
-  return <div className='studio-preview-panel' data-word-by-word={appearance.wordByWord}><div className='studio-live-preview' ref={follow.viewport} aria-label={t("Live lyric preview")} role='region' tabIndex={0}
+  return <div className='studio-preview-panel' style={{ '--lyric-translation-size': `${Math.max(10, appearance.translationSize * .7)}px` } as CSSProperties} data-word-by-word={appearance.wordByWord}><div className='studio-live-preview' ref={follow.viewport} aria-label={t("Live lyric preview")} role='region' tabIndex={0}
     onWheel={follow.browse} onTouchStart={follow.browse} onKeyDown={e => { if (['ArrowUp', 'ArrowDown', 'PageUp', 'PageDown', 'Home', 'End'].includes(e.key)) { e.stopPropagation(); follow.browse(); } }}>
     <div className='studio-preview-lines'>
     {scenes.map(scene => {
@@ -103,8 +103,8 @@ export function StudioLivePreview({ project, durationMs, enabled, recordingWordI
       <div className='studio-popout-content'>
       <button className='studio-preview-seek' disabled={!enabled || bounds.start === null} aria-label={t("Seek preview: {0}", line.text)} onClick={() => { if (bounds.start !== null) { getLocalPlayer().seek(bounds.start / 1000); follow.resume(); } }}>
       {showVocalLabels && <small>{line.role === 'background' ? t("Background · ") : ''}{performer?.name}</small>}<span className='studio-preview-text' dir='auto'>{line.units.map(w => { const p = project.performers.find(p => p.id === (w.performerId || line.performerId)); return <span key={w.id} data-preview-word={w.id} title={showVocalLabels ? p?.name : undefined} style={{ borderColor: project.settings.colors ? p?.color : undefined }}>{w.text}</span>; })}</span>
+      {line.annotations.filter(a => appearance.showTranslations !== false || a.kind !== 'translation').map(a => <span key={a.id} className='studio-preview-annotation' data-kind={a.kind} lang={a.language}>{a.text}</span>)}
       </button>
-      {line.annotations.map(a => <p key={a.id} className='studio-preview-annotation' data-kind={a.kind} lang={a.language}>{a.text}</p>)}
     </div></div></Fragment>; })}</div>; })}</div>; })}
     {project.boundaries?.endMs != null && <div className='studio-preview-line studio-preview-boundary' data-preview-boundary data-line-id={LYRIC_END}>{t('End of Lyric')}</div>}
     </div>

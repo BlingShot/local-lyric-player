@@ -391,7 +391,7 @@ Pre-roll|提前播放
 Shortcuts & timing help|快捷键与打轴帮助
 Default: next start|默认：下一行开始时间
 Pending|待同步
-{0}h {1}m {2}s|{0} 小时 {1} 分 {2} 种
+{0}h {1}m {2}s|{0} 小时 {1} 分 {2} 秒
 Waiting|等待中
 auto|自加
 left|靠左
@@ -585,7 +585,7 @@ Lyrics earlier|歌词提前
 Lyrics later|歌词延后
 Offset in seconds|偏移秒数
 Lyrics offset in seconds|歌词偏移秒数
-Lyrics timing: {0}{1} s|歌词偏移：{0}{1} 种
+Lyrics timing: {0}{1} s|歌词偏移：{0}{1} 秒
 Reset timing|重置偏移
 Negative plays lyrics earlier; positive plays them later. Saved for this song.|负值使歌词提前，档值使歌词延后。设置仅应用于此歌曲。
 Listen from this line|从本行试听

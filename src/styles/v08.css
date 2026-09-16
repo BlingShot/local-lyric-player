@@ -11,7 +11,7 @@ input[type=checkbox]:not(.ant-checkbox-input):disabled { opacity: .4; cursor: no
 .ant-checkbox-checked .ant-checkbox-inner { background: var(--control-accent); border-color: var(--control-accent); }.ant-checkbox-inner::after { border-color: var(--control-check) !important; }
 body { font-weight: var(--app-weight, 400); font-stretch: var(--app-stretch, 100%); letter-spacing: var(--app-spacing, 0); font-style: var(--app-style, normal); }
 .lyric-text, .studio-preview-text { font-weight: var(--lyrics-weight, 800) !important; font-stretch: var(--lyrics-stretch, 100%) !important; letter-spacing: var(--lyrics-spacing, 0) !important; font-style: var(--lyrics-style, normal) !important; font-variation-settings: 'wght' var(--lyrics-weight, 800); }
-.lyrics-reader .lyric-translation, .studio-preview-annotation[data-kind=translation] { font-size: var(--translation-font-size, 20px) !important; line-height: 1.45 !important; font-weight: 500; }
+.lyrics-reader .lyric-translation, .studio-preview-annotation[data-kind=translation] { font-size: var(--lyric-translation-size, var(--translation-font-size, 20px)) !important; line-height: 1.45 !important; font-weight: 500; }
 .lyrics-reader[data-performer-alignment=false] .lyric-line-button, .lyrics-reader[data-performer-alignment=false] .lyric-text, .lyrics-reader[data-performer-alignment=false] .lyric-annotation { text-align: start !important; margin-inline: 0 !important; }
 .lyrics-reader[data-performer-alignment=true] .lyric-secondary .lyric-line-button, .lyrics-reader[data-performer-alignment=true] .lyric-secondary .lyric-text, .lyrics-reader[data-performer-alignment=true] .lyric-secondary .lyric-annotation { text-align: end !important; }
 .studio-preview-panel[data-word-by-word=false] [data-preview-word] { background: none !important; -webkit-text-fill-color: currentColor !important; }
@@ -146,3 +146,25 @@ body :is(input, textarea, [contenteditable]:not([contenteditable=false])), body 
 @media (prefers-reduced-motion: reduce) {
   .lyrics-lines .lyric-dot, .lyrics-lines .lyric-dots, .lyric-dots-content button { transition: none !important; animation: none !important; transform: none !important; }
 }
+
+/* Keep the text left-aligned inside a centered reading column. */
+.offline-app:not([data-lyrics-fullscreen]) .lyrics-page .lyrics-lines { width: min(100%, 1040px); margin-inline: auto; padding-inline: clamp(24px, 9cqi, 104px); }
+.lyric-line-button:is(:hover, :focus-visible) .lyric-translation,
+.studio-preview-seek:is(:hover, :focus-visible) .studio-preview-annotation[data-kind=translation] { text-decoration: underline; text-decoration-thickness: .06em; text-underline-offset: .18em; }
+.studio-preview-annotation { display: block; margin-block: 4px; }
+
+/* Keep existing settings controls on one row when space permits. */
+.settings-category button, .settings-navigation button { white-space: nowrap; flex-shrink: 0; }
+.settings-field > span { flex: 0 0 auto; }
+.settings-field .app-select { max-width: 100%; }
+.settings-category input[type=checkbox] { flex-shrink: 0; }
+.settings-category .listening-totals strong { white-space: nowrap; font-variant-numeric: tabular-nums; }
+.lyric-theme-actions, .settings-folder-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+.lyric-theme-actions { margin-block: 12px; }
+.diagnostics-path { display: block; margin-block: 12px; font-size: 12px; overflow-wrap: anywhere; }
+@media (max-width: 600px) { .settings-category .listening-totals { grid-template-columns: 1fr; } }
+
+/* Override the legacy dark-only modal rule without changing the popup design. */
+body .ant-modal .ant-modal-content { background: var(--popup-surface) !important; color: var(--popup-text); }
+body .ant-modal .ant-modal-header { background: transparent !important; }
+body .ant-modal .ant-modal-close-x { color: var(--popup-muted); }

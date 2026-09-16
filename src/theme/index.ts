@@ -17,7 +17,7 @@ const apply = () => {
   document.querySelector('meta[name=theme-color]')?.setAttribute('content', state.mode === 'light' ? '#f0f2f4' : '#000000');
 };
 apply();
-let revision = 0;
+let revision = 0, writes = Promise.resolve();
 export async function initializeThemeConfig() {
   const request = revision;
   try { const mode = await configPreference('theme', state.mode); if (request === revision && ['dark', 'light'].includes(mode)) { state = { mode, error: '' }; apply(); listeners.forEach(listener => listener()); } }
@@ -26,10 +26,11 @@ export async function initializeThemeConfig() {
 export async function setThemeMode(mode: ThemeMode) {
   if (mode !== 'light' && mode !== 'dark') return;
   const request = ++revision;
-  let error = '';
-  try { if (window.localMusicDesktop) await window.localMusicDesktop.setConfig('theme', mode); else localStorage.setItem(key, mode); } catch { error = 'Theme changed for this session, but could not be saved. Check config.json and folder access.'; }
-  if (request !== revision) return;
-  state = { mode, error }; apply(); listeners.forEach(listener => listener());
+  state = { mode, error: '' }; apply(); listeners.forEach(listener => listener());
+  writes = writes.catch(() => {}).then(async () => { if (window.localMusicDesktop) await window.localMusicDesktop.setConfig('theme', mode); else localStorage.setItem(key, mode); });
+  try { await writes; } catch {
+    if (request === revision) { state = { ...state, error: 'Theme changed for this session, but could not be saved. Check config.json and folder access.' }; listeners.forEach(listener => listener()); }
+  }
 }
 window.addEventListener('storage', event => {
   if (event.key !== key) return;

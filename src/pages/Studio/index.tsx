@@ -36,5 +36,5 @@ export function StudioPage() {
       <button onClick={() => { setSeed(undefined); setTrackId(entry.draft.trackId); setRecoveryVersion(v => v + 1); setParams({ trackId: entry.draft.trackId }, { replace: true }); }}>{t('Restore draft')}</button>
       <button onClick={() => { if (window.confirm(t('Discard this recovery copy? Export any needed work first.'))) { try { discardStudioRecovery(entry); } catch { setError('Recovery copy could not be removed.'); } } }}>{t('Discard recovery')}</button>
     </div>)}{error && <p role='alert'>{error}</p>}
-  </details>}<StudioWorkspace key={`${trackId}:${recoveryVersion}`} trackId={trackId} seed={seed} changeTrack={(id, previous) => { setSeed(previous); setTrackId(id); setParams({ trackId: id }, { replace: true }); }} /></>;
+  </details>}<StudioWorkspace key={`${trackId}:${recoveryVersion}`} trackId={trackId} seed={seed} preferDraft={recoveryVersion > 0} changeTrack={(id, previous) => { setSeed(previous); setTrackId(id); setParams({ trackId: id }, { replace: true }); }} /></>;
 }
