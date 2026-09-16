@@ -312,3 +312,7 @@
   .studio-page .studio-follow-button { animation: none; }
   .studio-page .studio-tools button, .studio-page .studio-sync-tools button, .studio-page .studio-detail button, .studio-page .studio-inspector button, .studio-page .studio-inspector details, .studio-page .studio-inspector summary { transition: none; }
 }
+
+.studio-recovery-list { position: fixed; z-index: 120; top: 64px; right: 24px; max-width: min(480px, 90vw); max-height: 50vh; overflow: auto; padding: 12px; background: var(--background-base, #181818); color: var(--text-base, #fff); border: 1px solid #777; border-radius: 8px; }
+.studio-recovery-list > div { display: flex; align-items: center; gap: 8px; padding: 8px 0; }
+.studio-recovery-list span { flex: 1; overflow-wrap: anywhere; }

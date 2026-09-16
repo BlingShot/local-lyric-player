@@ -8,7 +8,10 @@ export const escapeXml = (value: string) => value.replace(/&/g, '&amp;').replace
 const time = (ms: number) => `${(ms / 1000).toFixed(3)}s`;
 // Valid XML IDs are encoded reversibly without confusing display names and identities.
 const xmlId = (id: string) => `id_${Array.from(new TextEncoder().encode(id)).map(b => b.toString(16).padStart(2, '0')).join('')}`;
-export function decodeId(value: string) { if (!/^id_(?:[\da-f]{2})+$/i.test(value)) return value; return new TextDecoder().decode(Uint8Array.from(value.slice(3).match(/../g)!, h => parseInt(h, 16))); }
+export function decodeId(value: string) { if (!/^id_(?:[\da-f]{2})+$/i.test(value)) return value; try {
+    const decoded = new TextDecoder('utf-8', { fatal: true }).decode(Uint8Array.from(value.slice(3).match(/../g)!, h => parseInt(h, 16)));
+    return decoded && !/[\u0000-\u0008\u000b\u000c\u000e-\u001f]/u.test(decoded) ? decoded : value;
+  } catch { return value; } }
 export function exportProjectTtml(project: StudioProject, durationMs: number, mode: TtmlMode, target: 'player' | 'amll' = 'player'): string {
   const errors = validateProject(project, durationMs, mode).filter(i => i.severity === 'error');
   if (errors.length) throw new Error(errors[0].message);
@@ -63,10 +66,11 @@ export function exportProjectTtml(project: StudioProject, durationMs: number, mo
   }
   for (const s of project.sections.filter(s => !s.lineIds.length)) divs.push(`<div xml:id="${xmlId(s.id)}" itunes:song-part="${names[s.tag] || s.tag[0] + s.tag.slice(1).toLowerCase()}" begin="${time(s.startMs!)}" end="${time(s.endMs!)}"/>`);
   const metadata = project.performers.map(p => `<ttm:agent xml:id="${xmlId(p.id)}" type="${p.type}"><ttm:name>${e(p.name)}</ttm:name></ttm:agent>`).join('');
-  const metas = { ...project.metadata.extra, musicName: project.metadata.title ? [project.metadata.title] : [], artists: project.metadata.artist ? [project.metadata.artist] : [], album: project.metadata.album ? [project.metadata.album] : [] };
+  const metas: Record<string, string[]> = { ...project.metadata.extra, musicName: project.metadata.title ? [project.metadata.title] : [], artists: project.metadata.artist ? [project.metadata.artist] : [], album: project.metadata.album ? [project.metadata.album] : [] };
+  delete metas['localMusic:idEncoding'];
   const extra = Object.entries(metas).flatMap(([key, values]) => values.map(value => `<amll:meta key="${e(key)}" value="${e(value)}"/>`)).join('');
   const boundaryMeta = project.boundaries ? Object.entries(project.boundaries).filter(([, value]) => value !== null).map(([key, value]) => `<amll:meta key="localMusic:lyric${key === 'startMs' ? 'Start' : 'End'}Ms" value="${value}"/>`).join('') : '';
-  return `<?xml version="1.0" encoding="UTF-8"?>\n<tt xmlns="${NS.tt}" xmlns:ttm="${NS.meta}" xmlns:itunes="${NS.apple}" xmlns:amll="${NS.amll}" xml:lang="${e(project.metadata.language || 'und')}" itunes:timing="${mode === 'word' ? 'Word' : 'Line'}"><head><metadata>${metadata}${extra}${boundaryMeta}</metadata></head><body>${divs.join('')}</body></tt>\n`;
+  return `<?xml version="1.0" encoding="UTF-8"?>\n<tt xmlns="${NS.tt}" xmlns:ttm="${NS.meta}" xmlns:itunes="${NS.apple}" xmlns:amll="${NS.amll}" xml:lang="${e(project.metadata.language || 'und')}" itunes:timing="${mode === 'word' ? 'Word' : 'Line'}"><head><metadata><amll:meta key="localMusic:idEncoding" value="utf8-hex-v1"/>${metadata}${extra}${boundaryMeta}</metadata></head><body>${divs.join('')}</body></tt>\n`;
 }
 export interface LrcPolicy { voices: 'lead' | 'all'; annotations: 'omit' | 'append' }
 export function exportProjectLrc(project: StudioProject, durationMs: number, policy: LrcPolicy): string {

@@ -1,12 +1,13 @@
+import { lyricRevision } from '../lyrics/revision';
 import { attachNativeAudio } from './nativeAudio';
 import { readLyrics } from '../lyrics/repository';
 import { store } from '../store/store';
 import { libraryActions } from '../store/slices/library';
 import { playerActions } from '../store/slices/player';
 import { uiActions } from '../store/slices/offlineUi';
-import { collectFiles, fileId, type LocalTrack } from '../library/importFiles';
-import { deleteTrack, readLibrary, recordFor, saveSettings, saveTrackColumns, saveTracks, saveAudioLyricsCopy, storageError,
-  type PlaybackSettings, type SavedTrack } from '../library/database';
+import { collectFiles, type LocalTrack } from '../library/importFiles';
+import { deleteTrack, readLibrary, saveSettings, saveTrackColumns, saveTracks, patchExistingTracks, saveAudioLyricsCopy, storageError,
+  type PlaybackSettings, type SavedTrack, type TrackPatch, type TrackMutation } from '../library/database';
 import { readAudioTags, validateCover } from '../library/metadata';
 import { LocalAudioPlayer } from './LocalAudioPlayer';
 import { PlaybackMemory } from './playbackMemory';
@@ -34,15 +35,15 @@ let stopped = false;
 let lastPlayedId: string | null = null;
 
 // Record updates share the mutation queue so a late duration/history write cannot undo an edit or removal.
-function saveTrackPatch(id: string, patch: Partial<LocalTrack>, lyrics?: SavedLyrics) {
+function saveTrackPatch(id: string, patch: TrackPatch, lyrics?: SavedLyrics) {
   const result = operations.then(async () => {
     if (stopped) return;
     const track = store.getState().library.tracks.find(item => item.id === id);
     if (!track) return;
-    const updated = { ...track, ...patch };
-    await saveTracks([{ track: recordFor(updated), lyrics }]);
+    const [updated] = await patchExistingTracks([{ id, patch, lyrics }]);
+    if (!updated) { forgetRemovedTrack(id); return; }
     const latest = store.getState().library.tracks.find(item => item.id === id);
-    if (latest) store.dispatch(libraryActions.updateTracks([{ ...latest, ...patch }]));
+    if (latest) store.dispatch(libraryActions.updateTracks([{ ...latest, ...updated }]));
   }).catch(report);
   operations = result;
   return result;
@@ -244,10 +245,10 @@ function operation(label: string, work: () => Promise<void>): Promise<boolean> {
   return result;
 }
 
-export function importAudioFiles(files: readonly File[]) {
+export function importAudioFiles(files: readonly File[], onResolved?: (ids: readonly (string | undefined)[]) => void) {
   return operation('Reading tags and saving audio copies…', async () => {
-    const result = collectFiles(files, store.getState().library.tracks);
-    const originals = new Map(files.map(file => [fileId(file), file]));
+    const result = await collectFiles(files, store.getState().library.tracks, track => audioCopies.get(track.id));
+    const originals = result.originals;
     const saved: SavedTrack[] = [];
     const addedAt = Date.now();
     for (const [index, track] of result.tracks.entries()) {
@@ -266,9 +267,27 @@ export function importAudioFiles(files: readonly File[]) {
     store.dispatch(libraryActions.addTracks(tracks));
     // An explicit album queue stays scoped to that album while importing elsewhere.
     if (!contextIds) getLocalPlayer().addTracks(saved.map(item => ({ id: item.track.id, url: URL.createObjectURL(item.audio!) })));
+    onResolved?.(result.resolvedIds);
     const warnings = tracks.filter(track => track.tagWarning || track.lyricsWarning).length;
     store.dispatch(uiActions.setImportMessage(`Added ${tracks.length} files. Saved on this device. ${result.duplicates ? `Skipped ${result.duplicates} duplicate files. ` : ''}${result.rejected ? `Skipped ${result.rejected} empty or unsupported files. ` : ''}${warnings ? `${warnings} files have unreadable tags or artwork; see Edit details.` : ''}`));
   });
+}
+
+/** Select the actual created/matched identity rather than deriving it from file metadata. */
+export async function importStudioAudio(file: File): Promise<string | undefined> {
+  let id: string | undefined;
+  const success = await importAudioFiles([file], ids => { id = ids[0]; });
+  return success ? id : undefined;
+}
+
+function forgetRemovedTrack(id: string) {
+  if (instance?.getState().currentId === id) instance.pause();
+  instance?.removeTrack(id);
+  audioCopies.delete(id);
+  if (coverUrls.has(id)) URL.revokeObjectURL(coverUrls.get(id)!);
+  coverUrls.delete(id);
+  if (contextIds) contextIds = contextIds.filter(item => item !== id);
+  store.dispatch(libraryActions.removeTrack(id));
 }
 
 export function removeAudioFile(id: string) {
@@ -283,22 +302,22 @@ export function removeAudioFile(id: string) {
   });
 }
 
-export async function writeLocalLyricsCopy(id: string, source: string, expected?: { source: string; savedAt: number }): Promise<Blob> {
+export async function writeLocalLyricsCopy(id: string, source: string, expected?: string | null): Promise<Blob> {
   let saved: Blob | undefined;
   const success = await operation('Writing lyrics to the saved audio copy…', async () => {
     const track = store.getState().library.tracks.find(item => item.id === id), original = audioCopies.get(id);
     if (!track || !original || track.unavailable) throw new Error('This audio copy is unavailable. Restore it before writing lyrics.');
     const before = await readLyrics(id);
-    if (expected && (before?.source !== expected.source || before?.savedAt !== expected.savedAt)) throw new Error('Lyrics changed during translation. No audio was overwritten.');
+    if (expected !== undefined && lyricRevision(before) !== expected) throw new Error('Lyrics changed during translation. No audio was overwritten.');
     const result = await writeAudioLyrics(original, track.fileName || track.name, source);
     // Re-read the actual new tag with the same reader used by the player before committing.
     const verified = await readAudioTags(new File([result], track.fileName || track.name, { type: result.type }), true);
     if (verified.lyrics?.source.trim() !== source.trim()) throw new Error('The written lyrics could not be verified. The saved audio copy is unchanged.');
     const record = embeddedRecord(id, track.fileName || track.name, verified.lyrics)!;
     const current = await readLyrics(id);
-    if (expected && (current?.source !== expected.source || current?.savedAt !== expected.savedAt)) throw new Error('Lyrics changed during translation. No audio was overwritten.');
+    if (lyricRevision(current) !== lyricRevision(before)) throw new Error('Lyrics changed during translation. No audio was overwritten.');
     if (before?.offsetMs !== undefined) record.offsetMs = before.offsetMs;
-    const updated = await saveAudioLyricsCopy(track, result, record);
+    const updated = await saveAudioLyricsCopy(track, result, record, lyricRevision(before));
     audioCopies.set(id, result);
     store.dispatch(libraryActions.updateTracks([{ ...track, ...updated }]));
     window.dispatchEvent(new CustomEvent('local-lyrics-updated', { detail: id }));
@@ -310,16 +329,21 @@ export async function writeLocalLyricsCopy(id: string, source: string, expected?
 }
 
 export type TrackEdits = Pick<LocalTrack, 'name' | 'artist' | 'album' | 'albumArtist' | 'trackNumber' | 'discNumber' | 'releaseDate' | 'compilation' | 'albumGroup'>;
-export function editAudioTracks(ids: readonly string[], edits: Partial<TrackEdits>, image?: File) {
+export function editAudioTracks(ids: readonly string[], edits: Partial<TrackEdits>, image?: File, expectedTracks?: readonly LocalTrack[]) {
+  // Capture the editor's version before any queued work or asynchronous image read.
+  const snapshots = (expectedTracks ?? store.getState().library.tracks).filter(track => ids.includes(track.id));
   return operation('Saving details…', async () => {
     const cover = image ? await validateCover(image) : undefined;
-    const tracks = store.getState().library.tracks.filter(track => ids.includes(track.id));
-    const updated = tracks.map(track => ({ ...track, ...edits,
-      name: edits.name?.trim() || (edits.name === undefined ? track.name : track.fileName || track.name),
-      artworkSource: cover && track.artworkSource !== 'embedded' ? 'custom' as const : track.artworkSource }));
-    await saveTracks(updated.map(track => ({ track: recordFor(track), cover: track.artworkSource !== 'embedded' ? cover : undefined })));
-    store.dispatch(libraryActions.updateTracks(updated.map(track => ({ ...track,
-      coverUrl: cover && track.artworkSource !== 'embedded' ? setCover(track.id, cover) : track.coverUrl }))));
+    const mutations: TrackMutation[] = snapshots.map(track => {
+      const patch: TrackPatch = { ...edits };
+      if (edits.name !== undefined) patch.name = edits.name.trim() || track.fileName || track.name;
+      const artwork = track.artworkSource !== 'embedded' ? cover : undefined;
+      if (artwork) patch.artworkSource = 'custom';
+      return { id: track.id, patch, cover: artwork, expected: { metadataRevision: track.metadataRevision } };
+    });
+    const saved = await patchExistingTracks(mutations);
+    store.dispatch(libraryActions.updateTracks(saved.flatMap((track, index) => track ? [{ ...snapshots[index], ...track,
+      coverUrl: mutations[index].cover ? setCover(track.id, mutations[index].cover!) : snapshots[index].coverUrl }] : [])));
   });
 }
 
@@ -331,8 +355,10 @@ export function restoreAudioFile(id: string, file: File) {
       throw new Error(`Choose the original file “${track.fileName || track.name}” (${track.originalSize ?? track.size} bytes), or import the different file as a new track.`);
     }
     await file.slice(0, 1).arrayBuffer(); await file.slice(-1).arrayBuffer();
-    const restored = { ...track, size: file.size, audioRevision: crypto.randomUUID() };
-    await saveTracks([{ track: recordFor(restored), audio: file }]);
+    const [record] = await patchExistingTracks([{ id, patch: { size: file.size, audioRevision: crypto.randomUUID() }, audio: file,
+      expected: { audioRevision: track.audioRevision, lyricsWrittenAt: track.lyricsWrittenAt, size: track.size } }]);
+    if (!record) throw new Error('This track was removed.');
+    const restored = { ...track, ...record };
     audioCopies.set(id, file);
     getLocalPlayer().removeTrack(id);
     if (!contextIds || contextIds.includes(id)) getLocalPlayer().addTracks([{ id, url: URL.createObjectURL(file) }]);

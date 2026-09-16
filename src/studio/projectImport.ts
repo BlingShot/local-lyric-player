@@ -1,8 +1,8 @@
+import { ImportIds, assertProjectIdentity } from './importIds.ts';
 import { NS, decodeId } from './projectExport.ts';
-import { newProject, tokenize, uid, unit, vocalLine, STRUCTURES, type StudioProject, type VocalLine, type Unit, type Section } from './project.ts';
+import { newProject, tokenize, unit, vocalLine, STRUCTURES, type StudioProject, type VocalLine, type Unit, type Section } from './project.ts';
 
 const attr = (e: Element, name: string, ns?: string) => ns ? e.getAttributeNS(ns, name) : e.getAttribute(name);
-const ownId = (e: Element, prefix: string) => { const id = attr(e, 'id', NS.xml); return id ? decodeId(id) : uid(prefix); };
 export function parseTtmlMillis(input: string): number {
   const value = input.trim(), offset = value.match(/^(\d+(?:\.\d+)?)(h|m|s|ms)$/), clock = value.match(/^(?:(\d+):)?([0-5]?\d):([0-5]\d)(?:\.(\d+))?$/);
   let ms: number;
@@ -38,6 +38,21 @@ export function importProjectTtml(source: string, trackId: string, fileName: str
       if (a.namespaceURI !== NS.xmlns && (!knownAttrs.has(a.localName) || a.namespaceURI && !Object.values(NS).includes(a.namespaceURI))) notes.add(`Attribute ${a.name} is retained in the project source but is not exported.`);
     }
   }
+  const encoding = all.filter(e => e.localName === 'meta' && e.namespaceURI === NS.amll && attr(e, 'key') === 'localMusic:idEncoding');
+  const encoded = encoding.length === 1 && attr(encoding[0], 'value') === 'utf8-hex-v1';
+  const ids = new ImportIds(xmlIds, encoded ? decodeId : undefined);
+  const nodeIndex = new Map(all.map((e, i) => [e, i]));
+  const entities = new WeakMap<Element, Map<string, string>>(), claimed = new Set<string>();
+  const ownId = (e: Element, prefix: string, derived = false): string => {
+    let kinds = entities.get(e); if (!kinds) { kinds = new Map(); entities.set(e, kinds); }
+    const previous = kinds.get(prefix); if (previous) return previous;
+    const raw = attr(e, 'id', NS.xml), base = raw ? ids.reference(raw) : `${prefix}-import-${nodeIndex.get(e)}`;
+    // A leaf span used as a voice container is also a word. The word keeps
+    // the external identity; the derived voice must have its own stable ID.
+    const separate = derived || prefix === 'l' && e.localName === 'span' && !e.children.length;
+    const id = raw && !separate && !claimed.has(base) ? base : ids.allocate(separate ? `${base}~${prefix}` : base);
+    claimed.add(id); kinds.set(prefix, id); return id;
+  };
   const bounds = (e: Element, parent: Bounds, limit: Bounds = parent): Bounds => {
     const begin = attr(e, 'begin'), end = attr(e, 'end'), dur = attr(e, 'dur'), origin = absolute ? 0 : parent.start;
     const start = begin === null ? parent.start : origin + parseTtmlMillis(begin);
@@ -46,15 +61,16 @@ export function importProjectTtml(source: string, trackId: string, fileName: str
     if (start < limit.start || stop !== null && limit.end !== null && stop > limit.end) notes.add('A child exceeds its declared parent time range. Effective times are clipped to the container; original declarations remain in project source.');
     return { start: Math.max(start, limit.start), end: limit.end === null ? stop : stop === null ? limit.end : Math.min(stop, limit.end) };
   };
-  const singer = (e: Element, inherited?: string) => { const id = attr(e, 'agent', NS.meta); return id === null ? inherited : decodeId(id); };
+  const singer = (e: Element, inherited?: string) => { const id = attr(e, 'agent', NS.meta); return id === null ? inherited : ids.reference(id); };
   project.metadata.language = attr(root, 'lang', NS.xml) || 'und';
   for (const e of all.filter(e => e.localName === 'agent' && e.namespaceURI === NS.meta)) {
     const id = attr(e, 'id', NS.xml); if (!id) { notes.add('Unnamed agent metadata needs review.'); continue; }
     const name = e.getElementsByTagNameNS(NS.meta, 'name')[0]?.textContent || id;
     const type = attr(e, 'type', NS.meta) || attr(e, 'type'); if (type && !['group', 'person'].includes(type)) notes.add(`Performer type ${type} is retained in source; editor uses person until reassigned.`);
-    project.performers.push({ id: decodeId(id), name, type: type === 'group' ? 'group' : 'person', color: ['#1ed760', '#85b7ff', '#ffb6de'][project.performers.length % 3], align: 'auto' });
+    project.performers.push({ id: ids.reference(id), name, type: type === 'group' ? 'group' : 'person', color: ['#1ed760', '#85b7ff', '#ffb6de'][project.performers.length % 3], align: 'auto' });
   }
   for (const e of all.filter(e => e.localName === 'meta' && e.namespaceURI === NS.amll)) { const key = attr(e, 'key'), value = attr(e, 'value'); if (key !== null && value !== null) (project.metadata.extra[key] ??= []).push(value); }
+  delete project.metadata.extra['localMusic:idEncoding'];
   project.metadata.title = project.metadata.extra.musicName?.join(' / ') || all.find(e => e.localName === 'title' && e.namespaceURI === NS.meta)?.textContent || '';
   project.metadata.artist = project.metadata.extra.artists?.join(' / ') || ''; project.metadata.album = project.metadata.extra.album?.join(' / ') || '';
   for (const key of ['musicName', 'artists', 'album']) delete project.metadata.extra[key];
@@ -77,7 +93,7 @@ export function importProjectTtml(source: string, trackId: string, fileName: str
       const text = preserve === 'preserve' ? raw : /^\s*$/.test(raw) && /[\n\r]/.test(raw) ? '' : raw.replace(/\s+/g, ' ');
       if (!text) return;
       const ownUnit = e.localName === 'span' && !!attr(e, 'id', NS.xml) && !e.children.length;
-      const units: Unit[] = timed || ownUnit ? [{ ...unit(text), id: ownUnit ? ownId(e, 'w') : uid('w'), startMs: timed ? b.start : null, endMs: timed ? b.end : null, performerId: performer !== line.performerId ? performer : undefined }] : tokenize(text).map(w => ({ ...w, performerId: performer !== line.performerId ? performer : undefined }));
+      const units: Unit[] = timed || ownUnit ? [{ ...unit(text), id: ownUnit ? ownId(e, 'w') : ids.allocate('w-import'), startMs: timed ? b.start : null, endMs: timed ? b.end : null, performerId: performer !== line.performerId ? performer : undefined }] : tokenize(text).map(w => ({ ...w, id: ids.allocate(w.id), performerId: performer !== line.performerId ? performer : undefined }));
       line.units.push(...units);
     };
     for (const node of e.childNodes) {
@@ -112,7 +128,7 @@ export function importProjectTtml(source: string, trackId: string, fileName: str
       const separate = childPerformer !== line.performerId;
       if (separate) {
         const split = vocalLine('', line.role, line.parentId);
-        split.id = ownId(child, 'l'); split.startMs = cb.start; split.endMs = cb.end; split.performerId = childPerformer;
+        split.id = ownId(child, 'l', true); split.startMs = cb.start; split.endMs = cb.end; split.performerId = childPerformer;
         readVocal(child, cb, split, childPerformer, depth + 1, childTimed, onNewLeadLine, vocalContainer); finish(split);
         if (onNewLeadLine) onNewLeadLine(split); else project.lines.push(split);
         continue;
@@ -164,6 +180,7 @@ export function importProjectTtml(source: string, trackId: string, fileName: str
   const head = [...root.children].find(e => e.localName === 'head');
   for (const e of head?.getElementsByTagName('*') || []) if (!knownHead.has(e.localName)) notes.add(`Metadata <${e.tagName}> remains in project source and is not exported.`);
   if (project.lines.length > 5000) throw new Error('Use at most 5,000 lines.');
+  assertProjectIdentity(project);
   project.selectedId = project.lines[0]?.id || ''; project.settings.mode = attr(root, 'timing', NS.apple) === 'Word' || project.lines.some(l => l.units.some(w => w.startMs !== null)) ? 'word' : 'line';
   project.source = { text: source, fileName, notices: [...notes] }; return project;
 }

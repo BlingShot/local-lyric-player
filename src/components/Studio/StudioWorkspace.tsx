@@ -13,8 +13,8 @@ import { StudioProjectRows } from './StudioProjectRows';
 import { StudioTransport } from './StudioTransport';
 import { StudioInspector } from './StudioInspector';
 import { StudioLivePreview } from './StudioLivePreview';
-import { AUDIO_ACCEPT, fileId, isAudioFileName, trackCover } from '../../library/importFiles';
-import { getLocalAudioElement, getLocalPlayer, importAudioFiles, playLocalTrack, restoreAudioFile, writeLocalLyricsCopy } from '../../player/runtime';
+import { AUDIO_ACCEPT, isAudioFileName, trackCover } from '../../library/importFiles';
+import { getLocalAudioElement, getLocalPlayer, importStudioAudio, playLocalTrack, restoreAudioFile, writeLocalLyricsCopy } from '../../player/runtime';
 import { store, useAppSelector } from '../../store/store';
 import { readLyrics } from '../../lyrics/repository';
 import { importProjectLrc } from '../../studio/projectImportLrc';
@@ -89,7 +89,13 @@ export function StudioWorkspace({ trackId, changeTrack, seed }: { trackId: strin
     if (!file || busy) return; if (edit.error) { setMessage('Save or export your project before changing audio.'); return; }
     if (!isAudioFileName(file.name) || !file.size) { setMessage('Choose a supported local audio file.'); return; }
     setBusy(true);
-    try { const id = fileId(file), existing = store.getState().library.tracks.find(t => t.id === id); const result = existing?.unavailable ? await restoreAudioFile(id, file) : await importAudioFiles([file]); if (result) { getLocalPlayer().pause(); changeTrack(id, trackId === 'untitled' ? edit.current.current : undefined); } else setMessage('Audio could not be saved.'); } finally { setBusy(false); }
+    try {
+      const restoring = track?.unavailable && file.name === (track.fileName || track.name) && file.size === (track.originalSize ?? track.size);
+      const id = restoring ? await restoreAudioFile(track!.id, file) ? track!.id : undefined : await importStudioAudio(file);
+      if (id) { getLocalPlayer().pause(); changeTrack(id, trackId === 'untitled' ? edit.current.current : undefined); }
+      else setMessage('Audio could not be saved.');
+    } finally { setBusy(false); }
+
   };
   const importFile = async (file?: File) => {
     if (!file || busy) return; setBusy(true);

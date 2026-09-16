@@ -9,7 +9,7 @@ import { newProject, vocalLine } from '../src/studio/project.ts';
 import { recordingVoices, voiceCursorAt } from '../src/studio/recordingVoices.ts';
 import { recordWord } from '../src/studio/recordWord.ts';
 
-test('duets split; backgrounds follow their parent; a later solo singer stays left', () => {
+test('duets split; backgrounds follow their parent; a later solo singer retains the same right lane', () => {
   const rows = [
     { id: 'a', groupId: 'a', agent: 'A', role: 'lead' as const, start: 10, end: 20 },
     { id: 'abg', groupId: 'a', agent: 'B', role: 'background' as const, start: 11, end: 19 },
@@ -20,13 +20,13 @@ test('duets split; backgrounds follow their parent; a later solo singer stays le
   const layout = vocalLayout(rows), duet = activeVocalLayout(layout, new Set(['a', 'abg', 'b', 'bbg']));
   assert.equal(duet.get('a')?.side, 'left'); assert.equal(duet.get('b')?.side, 'right');
   assert.deepEqual(duet.get('abg'), duet.get('a')); assert.deepEqual(duet.get('bbg'), duet.get('b'));
-  assert.equal(layout.get('solo')?.split, false); assert.equal(layout.get('solo')?.side, 'left');
-  assert.equal(activeVocalLayout(layout, new Set(['b'])).get('b')?.side, 'left');
+  assert.equal(layout.get('solo')?.split, true); assert.equal(layout.get('solo')?.side, 'right');
+  assert.equal(activeVocalLayout(layout, new Set(['b'])).get('b')?.side, 'right');
   assert.ok([...activeVocalLayout(layout, new Set(['a','b']), false).values()].every(lane => lane.side === 'left' && !lane.split));
 });
-test('adjacent phrases are not falsely classified as simultaneous', () => {
+test('adjacent performers keep their assigned columns even without overlap', () => {
   const layout = vocalLayout([{ id: 'a', groupId:'a', role:'lead', agent:'A', start:0,end:10 }, { id:'b',groupId:'b',role:'lead',agent:'B',start:10,end:20 }]);
-  assert.ok([...layout.values()].every(lane => !lane.split && lane.side === 'left'));
+  assert.deepEqual([...layout.values()].map(lane => lane.side), ['left', 'right']);
 });
 test('short words ease after their actual start without changing original timing', () => {
   const part = { text: 'fast', start: 10, end: 10.04 };

@@ -1,3 +1,4 @@
+import type { NativeCommandContext, NativeAudioResult, PlaybackErrorInfo } from '../player/playbackErrors';
 export interface DesktopStorageInfo {
   dataPath: string;
   cachePath: string;
@@ -17,9 +18,9 @@ declare global {
       nativeAudioDevices(): Promise<{ name: string; description: string }[]>;
       nativeAudioMeter(enabled: boolean): Promise<void>;
       nativeAudioEnergy(): Promise<number>;
-      nativeAudioLoad(value: { id: string; bytes: ArrayBuffer; device: string; exclusive: boolean; position: number; volume: number; speed: number }): Promise<void>;
-      nativeAudioCommand(command: 'play' | 'pause' | 'seek' | 'volume' | 'speed' | 'stop', value?: number): Promise<void>;
-      onNativeAudioState(callback: (state: { id: string; time: number; duration: number; paused: boolean; ended: boolean; ready: boolean; error?: string; exclusive?: boolean }) => void): () => void;
+      nativeAudioLoad(value: { id: string; bytes: ArrayBuffer; device: string; exclusive: boolean; position: number; volume: number; speed: number; context: NativeCommandContext }): Promise<NativeAudioResult>;
+      nativeAudioCommand(command: 'play' | 'pause' | 'seek' | 'volume' | 'speed' | 'stop', value: number | undefined, context: NativeCommandContext): Promise<NativeAudioResult>;
+      onNativeAudioState(callback: (state: { id: string; time: number; duration: number; paused: boolean; ended: boolean; ready: boolean; error?: PlaybackErrorInfo; exclusive?: boolean }) => void): () => void;
       spotifyInfo(): Promise<{ clientId: string; connected: boolean }>;
       spotifyLogin(clientId: string): Promise<{ clientId: string; connected: boolean }>;
       spotifyLogout(): Promise<void>;
@@ -33,7 +34,7 @@ declare global {
       importFolderInfo(): Promise<{ name: string; path: string } | null>;
       chooseImportFolder(): Promise<{ name: string; path: string } | null>;
       startFolderScan(): Promise<string>;
-      nextFolderBatch(id: string): Promise<{ done: boolean; files: { name: string; size: number; lastModified: number; url: string }[] }>;
+      nextFolderBatch(id: string): Promise<{ done: boolean; files: { name: string; size: number; lastModified: number; relativePath: string; url: string }[] }>;
       endFolderScan(id?: string): Promise<void>;
       disconnectImportFolder(): Promise<void>;
       setWindowTheme(mode: 'dark' | 'light'): Promise<void>;

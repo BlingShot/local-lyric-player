@@ -1,5 +1,5 @@
 import { openLibraryDatabase } from './database';
-import { fileId, isAudioFileName } from './importFiles';
+import { fileFingerprint, isAudioFileName } from './importFiles';
 import { importAudioFiles } from '../player/runtime';
 import { store } from '../store/store';
 
@@ -78,9 +78,9 @@ function scanDesktopFolder(): Promise<void> {
         for (const entry of batch.files) {
           if (run !== generation) return;
           count++;
-          const id = fileId(entry);
+          const id = `v2:${JSON.stringify([entry.relativePath, fileFingerprint(entry)])}`;
           if (seen.has(id)) continue;
-          if (!store.getState().library.tracks.some(track => track.id === id)) {
+          {
             if (!entry.size) throw new Error(`“${entry.name}” is empty.`);
             if (entry.size > 512 * 1024 * 1024) throw new Error(`“${entry.name}” exceeds the 512 MB automatic import limit. Import this file separately.`);
             publish({ message: `Importing ${entry.name}…` });
@@ -91,8 +91,9 @@ function scanDesktopFolder(): Promise<void> {
             if (run !== generation) return;
             if (blob.size !== entry.size) throw new Error(`“${entry.name}” could not be read completely. Scan again.`);
             const file = new File([blob], entry.name, { lastModified: entry.lastModified });
+            const before = new Set(store.getState().library.tracks.map(track => track.id));
             if (!await importAudioFiles([file])) throw new Error(`“${entry.name}” was not saved. Check the library error and scan again.`);
-            added++;
+            added += store.getState().library.tracks.filter(track => !before.has(track.id)).length;
           }
           seen.add(id); changed = true;
         }
@@ -106,7 +107,7 @@ function scanDesktopFolder(): Promise<void> {
   return running;
 }
 
-async function* filesIn(directory: ReadableDirectory, run: number, path = ''): AsyncGenerator<File> {
+async function* filesIn(directory: ReadableDirectory, run: number, path = ''): AsyncGenerator<{ file: File; path: string }> {
   for await (const entry of directory.values()) {
     if (run !== generation) return;
     const entryPath = `${path}${entry.name}`;
@@ -115,7 +116,7 @@ async function* filesIn(directory: ReadableDirectory, run: number, path = ''): A
       try {
         const file = await (entry as FileSystemFileHandle).getFile();
         if (!file.size) throw new Error('The audio file is empty.');
-        yield file;
+        yield { file, path: entryPath };
       } catch (error) {
         if (error instanceof DOMException && error.name === 'NotAllowedError') throw error;
         throw new Error(`Cannot read “${entryPath}”. Check the file and folder, then scan again.`);
@@ -143,7 +144,7 @@ export function scanFolder(): Promise<void> {
         if (pending.length) {
           const before = new Set(store.getState().library.tracks.map(track => track.id));
           if (!await importAudioFiles(pending)) throw new Error('Audio could not be saved. Check the library error, then scan again.');
-          added += pending.filter(file => !before.has(fileId(file))).length;
+          added += store.getState().library.tracks.filter(track => !before.has(track.id)).length;
         }
         if (pendingIds.length) {
           const next = { handle: current.handle, seenIds: [...seen] };
@@ -153,12 +154,12 @@ export function scanFolder(): Promise<void> {
         }
         pending = []; pendingIds = [];
       };
-      for await (const file of filesIn(current.handle, run)) {
+      for await (const { file, path } of filesIn(current.handle, run)) {
         if (run !== generation) return;
-        const id = fileId(file);
+        const id = `v2:${JSON.stringify([path, fileFingerprint(file)])}`;
         if (seen.has(id)) continue;
         seen.add(id); pendingIds.push(id);
-        if (!store.getState().library.tracks.some(track => track.id === id)) pending.push(file);
+        pending.push(file);
         // Bound metadata work and audio copies held by a transaction.
         if (pendingIds.length >= 25) await flush();
       }
@@ -230,6 +231,12 @@ export async function disconnectImportFolder() {
   } catch { fail(new Error('The saved folder connection could not be removed. Check browser storage and retry.')); }
 }
 
+function savedHistoryNeedsReview(ids: string[]) {
+  if (!ids.some(id => !id.startsWith('v2:'))) return false;
+  publish({ status: 'ready', message: 'Folder identity tracking was upgraded. Scan manually to recheck file contents; previously removed files may be imported again. Existing library data is unchanged.' });
+  return true;
+}
+
 export async function initializeFolderImport() {
   if (initialized) return;
   initialized = true;
@@ -239,6 +246,7 @@ export async function initializeFolderImport() {
       if (!saved) return;
       desktopFolder = { ...saved, seenIds: await desktopHistory(saved.path) };
       publish({ name: saved.name });
+      if (savedHistoryNeedsReview(desktopFolder.seenIds)) return;
       await scanDesktopFolder();
       return;
     }
@@ -252,6 +260,7 @@ export async function initializeFolderImport() {
     folder = saved;
     publish({ name: saved.handle.name });
     if (!supportsFolderImport()) throw new Error('This browser cannot reopen saved folders. Use Import music to select files.');
+    if (savedHistoryNeedsReview(folder.seenIds)) return;
     await scanFolder();
   } catch (error) { fail(error); }
 }

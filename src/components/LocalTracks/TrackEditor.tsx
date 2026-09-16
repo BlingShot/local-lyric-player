@@ -8,7 +8,8 @@ import { useAppSelector } from '../../store/store';
 export function TrackEditor({ tracks, albumOnly = false, onClose, onSaved }: {
   tracks: LocalTrack[]; albumOnly?: boolean; onClose: () => void; onSaved?: () => void;
 }) {
-  const first = tracks[0];
+  const [snapshots] = useState(() => tracks.map(track => ({ ...track })));
+  const first = snapshots[0];
   const [values, setValues] = useState<TrackEdits>({ name: first.name, artist: first.artist || '',
     album: first.album || '', albumArtist: first.albumArtist || '', trackNumber: first.trackNumber,
     discNumber: first.discNumber, releaseDate: first.releaseDate || '', compilation: first.compilation || false,
@@ -26,7 +27,7 @@ export function TrackEditor({ tracks, albumOnly = false, onClose, onSaved }: {
       compilation: values.compilation, albumGroup: values.albumGroup?.trim() || undefined };
     if (!albumOnly) Object.assign(edits, { name: values.name.trim(), artist: values.artist?.trim() || undefined,
       trackNumber: values.trackNumber, discNumber: values.discNumber });
-    const success = await editAudioTracks(tracks.map(track => track.id), edits, image);
+    const success = await editAudioTracks(snapshots.map(track => track.id), edits, image, snapshots);
     setSaving(false);
     if (success) { onSaved?.(); onClose(); }
   };

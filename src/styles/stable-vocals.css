@@ -1,0 +1,4 @@
+/* A long phrase spans its partners without changing cells as voices end. */
+.lyrics-reader .lyric-vocal-group { align-self: stretch; }
+.studio-vocal-scene[data-duet] { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); column-gap: 24px; align-items: stretch; }
+.studio-vocal-group { min-width: 0; }

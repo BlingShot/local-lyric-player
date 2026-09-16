@@ -3,54 +3,63 @@ export interface VocalLayoutLine {
   start: number; end?: number;
 }
 export interface VocalLane { groupId: string; side: 'left' | 'right'; split: boolean }
-const overlaps = (a: { start: number; end: number }, b: { start: number; end: number }) => a.start < b.end && b.start < a.end;
+export interface VocalGridCell { row: number; rowSpan: number }
 
-/** A backing vocal belongs to its parent, not to a separate visual column. */
-export function vocalLayout(lines: readonly VocalLayoutLine[]): Map<string, VocalLane> {
-  const parents = new Map<string, VocalLayoutLine>();
-  for (const line of lines) if (line.role === 'lead') parents.set(line.groupId, line);
-  for (const line of lines) if (!parents.has(line.groupId)) parents.set(line.groupId, line);
-  const groups = [...parents.values()].map((line, index, all) => ({
-    line, index, start: line.start,
-    end: line.end ?? Math.min(...all.filter(other => other.start > line.start).map(other => other.start), Infinity),
-    performer: line.agent?.trim().split(/\s+/).sort().join(' ') || line.groupId,
-  })).sort((a, b) => a.start - b.start || a.index - b.index);
-  const assigned = new Map<string, VocalLane>();
-  for (const group of groups) {
-    const partners = groups.filter(other => other !== group && other.performer !== group.performer && overlaps(group, other));
-    const occupied = new Set(partners.map(other => assigned.get(other.line.groupId)?.side).filter(Boolean));
-    const side = occupied.has('left') && !occupied.has('right') ? 'right' : 'left';
-    assigned.set(group.line.groupId, { groupId: group.line.groupId, side, split: partners.length > 0 });
+function vocalGroups<T extends VocalLayoutLine>(lines: readonly T[]) {
+  const grouped = new Map<string, T[]>();
+  for (const line of lines) {
+    const group = grouped.get(line.groupId) || [];
+    group.push(line); grouped.set(line.groupId, group);
   }
+  const starts = [...new Set(lines.map(line => line.start))].sort((a, b) => a - b);
+  const nextStart = new Map(starts.map((start, i) => [start, starts[i + 1] ?? Infinity]));
+  return [...grouped].map(([id, members], index) => {
+    const lead = members.find(line => line.role === 'lead') || members[0];
+    return { id, lines: members, index, performer: lead.agent?.trim() ? `agent:${lead.agent.trim().split(/\s+/).sort().join(' ')}` : 'unassigned',
+      start: Math.min(...members.map(line => line.start)),
+      end: Math.max(...members.map(line => line.end ?? nextStart.get(line.start)!)),
+    };
+  }).sort((a, b) => a.start - b.start || a.index - b.index);
+}
+
+/** The first appearance assigns a performer a lane for the entire score.
+ * Overlap/highlighting never changes ownership; backing vocals follow the lead.
+ * With more than two performers lanes alternate, but each phrase gets its own row.
+ */
+export function vocalLayout(lines: readonly VocalLayoutLine[]): Map<string, VocalLane> {
+  const groups = vocalGroups(lines), performers = new Map<string, 'left' | 'right'>();
+  for (const group of groups) if (!performers.has(group.performer))
+    performers.set(group.performer, performers.size % 2 ? 'right' : 'left');
+  const split = performers.size > 1;
+  const assigned = new Map(groups.map(group => [group.id, {
+    groupId: group.id, side: performers.get(group.performer)!, split,
+  }]));
   return new Map(lines.map(line => [line.id, assigned.get(line.groupId)!]));
 }
 
-/** Solo takes priority even when the same performer shares a duet later. */
-export function activeVocalLayout(layout: ReadonlyMap<string, VocalLane>, activeIds: ReadonlySet<string>, enabled = true): Map<string, VocalLane> {
-  const activeGroups = new Set([...activeIds].map(id => layout.get(id)?.groupId).filter(Boolean));
+/** Playback changes highlighting, never structural lane ownership. */
+export function activeVocalLayout(layout: ReadonlyMap<string, VocalLane>, _activeIds: ReadonlySet<string>, enabled = true): Map<string, VocalLane> {
   return new Map([...layout].map(([id, lane]) => [id,
-    !enabled || activeGroups.size === 1 && activeGroups.has(lane.groupId)
-      ? { ...lane, side: 'left', split: false } : lane,
+    enabled ? lane : { ...lane, side: 'left', split: false },
   ]));
 }
 
-/** Overlapping vocal groups share a row of columns rather than pushing each other offscreen. */
+/** Temporal overlap components; a component may contain several visual rows. */
 export function vocalScenes<T extends VocalLayoutLine>(lines: readonly T[]) {
-  const grouped = new Map<string, T[]>();
-  for (const line of lines) { const group = grouped.get(line.groupId) || []; group.push(line); grouped.set(line.groupId, group); }
-  const groups = [...grouped.values()], parents = groups.map(group => group.find(line => line.role === 'lead') || group[0]);
-  const roots = parents.map((_, index) => index);
-  const root = (index: number): number => roots[index] === index ? index : (roots[index] = root(roots[index]));
-  const end = (line: T) => line.end ?? Math.min(...parents.filter(other => other.start > line.start).map(other => other.start), Infinity);
-  for (let a = 0; a < parents.length; a++) for (let b = a + 1; b < parents.length; b++) {
-    const left = parents[a], right = parents[b];
-    if (left.agent && left.agent === right.agent) continue;
-    if (left.start < end(right) && right.start < end(left)) roots[root(b)] = root(a);
+  const scenes: { id: string; groups: T[][] }[] = [];
+  let end = -Infinity;
+  // Sorted interval components need only a sweep, not pairwise O(n²) checks.
+  for (const group of vocalGroups(lines)) {
+    if (!scenes.length || group.start >= end) { scenes.push({ id: group.id, groups: [] }); end = group.end; }
+    else end = Math.max(end, group.end);
+    scenes[scenes.length - 1].groups.push(group.lines);
   }
-  const scenes = new Map<number, { id: string; groups: T[][] }>();
-  groups.forEach((group, index) => {
-    const key = root(index), scene = scenes.get(key) || { id: parents[key].groupId, groups: [] };
-    scene.groups.push(group); scenes.set(key, scene);
-  });
-  return [...scenes.values()];
+  return scenes;
+}
+
+/** Each vocal group occupies a separate chronological row, even during a duet.
+ * Equal starts retain score order. No spanning/overlapping cells or live reflow.
+ */
+export function vocalSceneRows<T extends VocalLayoutLine>(members: readonly T[][], _layout: ReadonlyMap<string, VocalLane>): Map<string, VocalGridCell> {
+  return new Map(vocalGroups(members.flat()).map((group, index) => [group.id, { row: index + 1, rowSpan: 1 }]));
 }

@@ -1,11 +1,11 @@
-import { vocalLayout, activeVocalLayout } from '../../lyrics/vocalLayout';
+import '../../styles/stable-vocals.css';
+import { vocalLayout, activeVocalLayout, vocalScenes, vocalSceneRows } from '../../lyrics/vocalLayout';
 import { wordVisualProgress, rapidWord } from '../../lyrics/wordVisual';
 import { sustainedGlow } from '../../lyrics/sustained';
 import type { SyncTarget } from '../../studio/useWordRecording';
 import { useLocalFonts } from '../../theme/fonts';
 import { t } from '../../i18n';
 import { Fragment, useEffect, useMemo, useState } from 'react';
-import { groupVocalLines } from '../../lyrics/visualOrder';
 import { subscribeAudioClock } from '../../lyrics/audioClock';
 import { useLyricFollow } from '../../lyrics/useLyricFollow';
 import { getLocalPlayer } from '../../player/runtime';
@@ -21,11 +21,13 @@ export function StudioLivePreview({ project, durationMs, enabled, recordingWordI
   const appearance = useAppSelector(state => state.ui.lyricsAppearance);
   const { showVocalLabels } = appearance;
   const timeline = useStudioTimeline(project, durationMs / 1000);
-  const visualLines = useMemo(() => groupVocalLines(project.lines, line => line.parentId || line.id), [project.lines]);
-  const layout = useMemo(() => vocalLayout(project.lines.map(line => {
+  const score = useMemo(() => project.lines.map(line => {
     const bounds = lineBounds(project, line, durationMs);
-    return { id: line.id, groupId: line.parentId || line.id, role: line.role, agent: line.performerId, start: (bounds.start ?? Infinity) / 1000, end: bounds.end === null ? undefined : bounds.end / 1000 };
-  })), [project.lines, durationMs]);
+    return { line, id: line.id, groupId: line.parentId || line.id, role: line.role, agent: line.performerId,
+      start: (bounds.start ?? Infinity) / 1000, end: bounds.end === null ? undefined : bounds.end / 1000 };
+  }), [project, durationMs]);
+  const layout = useMemo(() => vocalLayout(score), [score]);
+  const scenes = useMemo(() => vocalScenes(score).map(scene => ({ ...scene, cells: vocalSceneRows(scene.groups, layout) })), [score, layout]);
   const [focusId, setFocusId] = useState<string>();
   const follow = useLyricFollow(focusId, `${fonts.lyrics.family}:${appearance.translationSize}:${appearance.performerAlignment}`, true, project.trackId);
   useEffect(() => {
@@ -87,7 +89,15 @@ export function StudioLivePreview({ project, durationMs, enabled, recordingWordI
   return <div className='studio-preview-panel' data-word-by-word={appearance.wordByWord}><div className='studio-live-preview' ref={follow.viewport} aria-label={t("Live lyric preview")} role='region' tabIndex={0}
     onWheel={follow.browse} onTouchStart={follow.browse} onKeyDown={e => { if (['ArrowUp', 'ArrowDown', 'PageUp', 'PageDown', 'Home', 'End'].includes(e.key)) { e.stopPropagation(); follow.browse(); } }}>
     <div className='studio-preview-lines'>
-    {visualLines.map(line => { const performer = project.performers.find(p => p.id === line.performerId), bounds = lineBounds(project, line, durationMs); return <Fragment key={line.id}>
+    {scenes.map(scene => {
+      const duet = appearance.performerAlignment && scene.groups.some(group => layout.get(group[0].id)?.split);
+      return <div className='studio-vocal-scene' data-duet={duet || undefined} key={scene.id}>
+      {scene.groups.map(group => {
+        const cell = scene.cells.get(group[0].groupId)!, side = layout.get(group[0].id)?.side;
+        return <div className='studio-vocal-group' key={group[0].groupId} style={duet ? {
+          gridColumn: side === 'right' ? 2 : 1, gridRow: `${cell.row} / span ${cell.rowSpan}`,
+        } : undefined}>
+        {group.map(({ line }) => { const performer = project.performers.find(p => p.id === line.performerId), bounds = lineBounds(project, line, durationMs); return <Fragment key={line.id}>
       {timeline.gaps.has(line.id) && <div className='studio-preview-interlude' data-preview-gap data-interlude-id={`gap:${line.id}`} aria-label={t("Preview instrumental break")}>♪</div>}
       <div className='studio-preview-line' data-preview-line={line.id} data-line-id={line.id} data-vocal-group={line.parentId || line.id} data-popout={line.role === 'background' || undefined} data-background={line.role === 'background' || undefined} data-vocal-side={appearance.performerAlignment ? layout.get(line.id)?.side || 'left' : 'left'} style={{ textAlign: appearance.performerAlignment && layout.get(line.id)?.side === 'right' ? 'right' : 'left' }}>
       <div className='studio-popout-content'>
@@ -95,7 +105,7 @@ export function StudioLivePreview({ project, durationMs, enabled, recordingWordI
       {showVocalLabels && <small>{line.role === 'background' ? t("Background · ") : ''}{performer?.name}</small>}<span className='studio-preview-text' dir='auto'>{line.units.map(w => { const p = project.performers.find(p => p.id === (w.performerId || line.performerId)); return <span key={w.id} data-preview-word={w.id} title={showVocalLabels ? p?.name : undefined} style={{ borderColor: project.settings.colors ? p?.color : undefined }}>{w.text}</span>; })}</span>
       </button>
       {line.annotations.map(a => <p key={a.id} className='studio-preview-annotation' data-kind={a.kind} lang={a.language}>{a.text}</p>)}
-    </div></div></Fragment>; })}
+    </div></div></Fragment>; })}</div>; })}</div>; })}
     {project.boundaries?.endMs != null && <div className='studio-preview-line studio-preview-boundary' data-preview-boundary data-line-id={LYRIC_END}>{t('End of Lyric')}</div>}
     </div>
   </div>{!follow.following && <button className='studio-follow-button' onClick={follow.resume}>{t("Resume preview")}</button>}</div>;
