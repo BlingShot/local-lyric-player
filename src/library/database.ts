@@ -79,6 +79,7 @@ export function recordFor(track: LocalTrack): TrackRecord {
   return record;
 }
 
+/** Create complete new records only. Ordinary updates must use patchExistingTracks. */
 export async function saveTracks(items: readonly SavedTrack[]) {
   const db = await openLibraryDatabase();
   const tx = db.transaction(['tracks', 'audio', 'covers', 'lyrics'], 'readwrite');
@@ -86,7 +87,8 @@ export async function saveTracks(items: readonly SavedTrack[]) {
   let writeFailure: unknown;
   try {
     for (const item of items) {
-      tx.objectStore('tracks').put(recordFor(item.track), item.track.id);
+      if (!item.audio) throw new Error('A new track requires an audio copy.');
+      tx.objectStore('tracks').add(recordFor(item.track), item.track.id);
       if (item.audio) tx.objectStore('audio').put(item.audio, item.track.id);
       if (item.cover) tx.objectStore('covers').put(item.cover, item.track.id);
       if (item.lyrics) {
@@ -99,7 +101,77 @@ export async function saveTracks(items: readonly SavedTrack[]) {
       }
     }
   } catch (error) { tx.abort(); await done.catch(() => {}); throw error; }
-  await done.catch(error => { throw writeFailure ?? error; });
+  await done.catch(error => {
+    if (!writeFailure && error?.name === 'ConstraintError') throw new Error('This audio was already imported in another tab. Reload the library.');
+    throw writeFailure ?? error;
+  });
+}
+
+// Stable IDs and source identity are deliberately absent from the patch whitelist.
+const patchKeys = ['name', 'artist', 'album', 'albumArtist', 'trackNumber', 'discNumber',
+  'releaseDate', 'compilation', 'albumGroup', 'artworkSource', 'duration', 'durationChecked',
+  'lastPlayedAt', 'analysisMetadata', 'embeddedLyricsChecked', 'lyricsWarning', 'size', 'audioRevision'] as const;
+export type TrackPatch = Partial<Pick<TrackRecord, typeof patchKeys[number]>>;
+export interface TrackMutation {
+  id: string; patch: TrackPatch; expected?: Partial<TrackRecord>;
+  audio?: Blob; cover?: Blob; lyrics?: SavedLyrics;
+}
+const detailKeys = new Set<string>(patchKeys.slice(0, 10));
+
+/** Read, compare and patch the latest record in ONE transaction shared by all tabs.
+ * Missing background updates are skipped; an explicit edit reports a conflict.
+ * The batch is atomic, including audio/artwork and embedded lyric discovery.
+ */
+export async function patchExistingTracks(items: readonly TrackMutation[]): Promise<(TrackRecord | undefined)[]> {
+  const db = await openLibraryDatabase();
+  const tx = db.transaction(['tracks', 'audio', 'covers', 'lyrics'], 'readwrite');
+  const done = completed(tx), results: (TrackRecord | undefined)[] = new Array(items.length).fill(undefined);
+  let failure: unknown;
+  const seen = new Set<string>();
+  const abort = (error: unknown) => { failure = error; tx.abort(); };
+  try {
+    items.forEach((item, index) => {
+      if (seen.has(item.id)) throw new Error('Duplicate track update in one batch.');
+      seen.add(item.id);
+      if (Object.keys(item.patch).some(key => !(patchKeys as readonly string[]).includes(key)))
+        throw new Error('Invalid track update field.');
+      if (('size' in item.patch || 'audioRevision' in item.patch) && !item.audio)
+        throw new Error('Replacing audio metadata requires its audio copy.');
+      if (item.lyrics && item.lyrics.trackId !== item.id) throw new Error('Mismatched lyric identity.');
+      const request = tx.objectStore('tracks').get(item.id);
+      request.onsuccess = () => {
+        try {
+          const latest = request.result as TrackRecord | undefined;
+          if (!latest) {
+            if (item.expected) throw new Error('This track was removed in another tab. Reload the library before editing.');
+            return;
+          }
+          if (item.expected && Object.entries(item.expected).some(([key, value]) =>
+            !Object.is(latest[key as keyof TrackRecord], value)))
+            throw new Error('This track changed in another tab. Reload its details before saving again.');
+          const patch = { ...item.patch };
+          // An old playback event must not move recent-play history backwards.
+          if (patch.lastPlayedAt !== undefined) patch.lastPlayedAt = Math.max(latest.lastPlayedAt ?? 0, patch.lastPlayedAt);
+          const changedDetails = !!item.cover || Object.keys(patch).some(key => detailKeys.has(key));
+          const updated = { ...latest, ...patch,
+            ...(changedDetails ? { metadataRevision: crypto.randomUUID() } : {}) };
+          tx.objectStore('tracks').put(updated, item.id);
+          if (item.audio) tx.objectStore('audio').put(item.audio, item.id);
+          if (item.cover) tx.objectStore('covers').put(item.cover, item.id);
+          if (item.lyrics) {
+            const lyric = tx.objectStore('lyrics').getKey(item.id);
+            lyric.onsuccess = () => {
+              try { if (lyric.result === undefined) tx.objectStore('lyrics').put(item.lyrics, item.id); }
+              catch (error) { abort(error); }
+            };
+          }
+          results[index] = updated;
+        } catch (error) { abort(error); }
+      };
+    });
+  } catch (error) { abort(error); }
+  await done.catch(error => { throw failure ?? error; });
+  return results;
 }
 
 export async function deleteTrack(id: string) {

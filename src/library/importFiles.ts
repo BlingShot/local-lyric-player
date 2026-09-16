@@ -8,6 +8,7 @@ export interface LocalTrack {
   lyricsWrittenAt?: string;
   lastModified: number;
   audioRevision?: string;
+  metadataRevision?: string;
   analysisMetadata?: AudioAnalysisMetadata;
   duration?: number;
   durationChecked?: boolean;

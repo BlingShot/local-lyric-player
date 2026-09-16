@@ -37,6 +37,7 @@ jobs:
     timeout-minutes: 30
     env:
       CSC_IDENTITY_AUTO_DISCOVERY: 'false'
+      LYRIC_TEST_FONT_PATH: C:/Windows/Fonts/arial.ttf
     steps:
       - uses: actions/checkout@v4
         with:
@@ -46,10 +47,16 @@ jobs:
           node-version: '22'
           cache: npm
       - run: npm ci
+      - name: Install audio test fixture encoder
+        run: choco install ffmpeg --no-progress -y
       - run: npm run typecheck
       - run: npm test
       - name: Native resource and desktop policy tests
         run: node --test tests/*.test.mjs
+      - name: Install browser for regression tests
+        run: npx playwright install chromium
+      - name: Browser issue regressions
+        run: node scripts/test-issue-regressions.mjs
       - name: Build Windows portable
         run: npm run desktop:build
       - uses: actions/upload-artifact@v4
@@ -63,4 +70,11 @@ jobs:
           name: Lyric-Player-Web-${{ github.sha }}
           path: build/
           if-no-files-found: error
+          retention-days: 14
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: Regression-report-${{ github.sha }}
+          path: test-results/issues-7-11/
+          if-no-files-found: ignore
           retention-days: 14

@@ -5,11 +5,14 @@ import path from 'node:path';
 import { DesktopConfig } from '../electron/config.mjs';
 import { DesktopFonts } from '../electron/font-store.mjs';
 
+// CI may supply an installed font; no font binary is bundled or redistributed.
+const fontFixture = process.env.LYRIC_TEST_FONT_PATH || 'tests/fixtures/fonts/DMSans-Variable.woff2';
+
 test('Desktop fonts keep independent selections, reuse identical bytes and remove unused copies', async () => {
   await mkdir('test-results', { recursive: true });
   const folder = await mkdtemp(path.resolve('test-results/font-store-'));
   const config = new DesktopConfig(folder), fonts = new DesktopFonts(config);
-  const bytes = new Uint8Array(await readFile('tests/fixtures/fonts/DMSans-Variable.woff2'));
+  const bytes = new Uint8Array(await readFile(fontFixture));
   await Promise.all([fonts.set('app', { kind: 'file', name: 'DM Sans.woff2', bytes }), fonts.set('lyrics', { kind: 'file', name: 'Lyrics.woff2', bytes })]);
   assert.equal((await readdir(fonts.directory)).length, 1);
   assert.deepEqual((await fonts.get('lyrics')).bytes, bytes);
@@ -31,7 +34,7 @@ test('Invalid fonts and failed config writes preserve the previous selection wit
   await assert.rejects(fonts.set('app', { kind: 'file', name: 'bad.ttf', bytes: new Uint8Array(16) }), /valid TTF/);
   assert.equal((await fonts.get('app')).family, 'Arial');
   const originalSet = config.set.bind(config); config.set = () => Promise.reject(new Error('Simulated write failure'));
-  await assert.rejects(fonts.set('app', { kind: 'file', name: 'test.woff2', bytes: new Uint8Array(await readFile('tests/fixtures/fonts/DMSans-Variable.woff2')) }), /Simulated/);
+  await assert.rejects(fonts.set('app', { kind: 'file', name: 'test.woff2', bytes: new Uint8Array(await readFile(fontFixture)) }), /Simulated/);
   assert.equal((await readdir(fonts.directory)).length, 0);
   config.set = originalSet; assert.equal((await fonts.get('app')).family, 'Arial');
   await config.set('fonts', { app: { kind: 'file', file: '../../outside', name: 'bad' } });

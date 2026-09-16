@@ -132,10 +132,13 @@ export class LocalAudioPlayer {
 
   private armWatchdog() {
     if (this.watchdog) return;
-    const command = this.command;
+    const command = this.command, position = this.audio.currentTime;
     this.watchdog = setTimeout(() => {
       this.watchdog = undefined;
       if (!this.disposed && command === this.command) {
+        // A backend can resume without another playing event. Require both
+        // usable media and clock progress; paused/stalled media still times out.
+        if (this.audio.currentTime > position && this.confirmPlaying(command)) return;
         this.fail('Audio loading timed out. Import the file again or choose another track.');
       }
     }, this.options.loadTimeoutMs ?? 15000);
@@ -194,15 +197,33 @@ export class LocalAudioPlayer {
     if (autoplay) this.resume();
   }
 
+  private confirmPlaying(command: number) {
+    if (this.disposed || command !== this.command || !this.wantsPlayback ||
+        !this.isCurrentSource() || this.audio.paused || this.audio.ended ||
+        this.audio.error || this.audio.readyState < 3) return false;
+    this.clearWatchdog();
+    this.update({ status: 'playing' });
+    return true;
+  }
+
   private resume() {
     if (!this.state.currentId || this.disposed) return;
+    // Repeated play is not a reload or a request to seek back to zero.
+    if (this.state.status === 'playing' && this.isCurrentSource() &&
+        !this.audio.paused && !this.audio.ended && !this.audio.error) {
+      this.wantsPlayback = true;
+      this.clearWatchdog();
+      return;
+    }
     const command = ++this.command;
     this.clearWatchdog();
     this.wantsPlayback = true;
     this.update({ status: 'loading' });
     this.armWatchdog();
     // play() must run directly within the user's gesture, not in a React effect.
-    this.audio.play().catch((error: unknown) => {
+    this.audio.play().then(() => {
+      this.confirmPlaying(command);
+    }, (error: unknown) => {
       if (this.disposed || command !== this.command) return;
       const name = error instanceof Error ? error.name : '';
       if (name === 'NotAllowedError' || name === 'AbortError') {

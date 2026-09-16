@@ -21,7 +21,7 @@ test('duets split; backgrounds follow their parent; a later solo singer stays le
   assert.equal(duet.get('a')?.side, 'left'); assert.equal(duet.get('b')?.side, 'right');
   assert.deepEqual(duet.get('abg'), duet.get('a')); assert.deepEqual(duet.get('bbg'), duet.get('b'));
   assert.equal(layout.get('solo')?.split, false); assert.equal(layout.get('solo')?.side, 'left');
-  assert.equal(activeVocalLayout(layout, new Set(['b'])).get('b')?.side, 'left');
+  assert.equal(activeVocalLayout(layout, new Set(['b'])).get('b')?.side, 'right');
   assert.ok([...activeVocalLayout(layout, new Set(['a','b']), false).values()].every(lane => lane.side === 'left' && !lane.split));
 });
 test('adjacent phrases are not falsely classified as simultaneous', () => {

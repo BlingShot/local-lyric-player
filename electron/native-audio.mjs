@@ -2,19 +2,19 @@ import { spawn } from 'node:child_process';
 import { connect } from 'node:net';
 import { EventEmitter } from 'node:events';
 import { randomUUID } from 'node:crypto';
-import { mkdir, writeFile, unlink } from 'node:fs/promises';
-import path from 'node:path';
+import { AudioTempFiles } from './audio-temp-files.mjs';
 const delay = ms => new Promise(resolve => setTimeout(resolve, ms));
 const finite = (value, min, max) => typeof value === 'number' && Number.isFinite(value) && value >= min && value <= max;
 
 // Only local bytes and a small command whitelist cross the renderer boundary.
 export class NativeAudio extends EventEmitter {
-  constructor(binary, directory) {
-    super(); this.binary = binary; this.directory = directory; this.requests = new Map(); this.files = new Set(); this.serial = Promise.resolve(); this.sequence = 0;
+  constructor(binary, directory, { loadTimeoutMs = 15000 } = {}) {
+    super(); this.loadTimeoutMs = loadTimeoutMs; this.binary = binary; this.directory = directory; this.requests = new Map(); this.temp = new AudioTempFiles(directory); this.files = this.temp.files; this.serial = Promise.resolve(); this.sequence = 0;
     this.state = { id: '', time: 0, duration: 0, paused: true, ended: false, ready: false, exclusive: false }; this.closed = false; this.meterEnabled = false;
   }
   update(patch) { this.state = { ...this.state, ...patch }; this.emit('state', { ...this.state }); }
-  enqueue(fn) { const result = this.serial.then(fn); this.serial = result.catch(() => {}); return result; }
+  assertOpen() { if (this.closed) throw new Error('Native audio is closed.'); }
+  enqueue(fn) { const result = this.serial.then(() => { this.assertOpen(); return fn(); }); this.serial = result.catch(() => {}); return result; }
   async start() {
     if (this.closed) throw new Error('Native audio is closed.');
     if (this.socket) return;
@@ -38,6 +38,7 @@ export class NativeAudio extends EventEmitter {
         try { socket = await new Promise((resolve, reject) => { const candidate = connect(pipe); candidate.once('connect', () => { candidate.removeListener('error', reject); resolve(candidate); }); candidate.once('error', error => { candidate.destroy(); reject(error); }); }); break; } catch { await delay(40); }
       }
       if (!socket) { child.kill(); throw new Error('Native audio IPC did not start.'); }
+      if (this.closed) { socket.destroy(); child.kill(); throw new Error('Native audio is closed.'); }
       this.socket = socket; let buffer = '';
       socket.setEncoding('utf8');
       socket.on('error', error => { if (!this.closed) this.update({ error: error.message, paused: true }); });
@@ -68,7 +69,7 @@ export class NativeAudio extends EventEmitter {
   }
   request(command) {
     return new Promise((resolve, reject) => {
-      if (!this.socket || this.socket.destroyed) { reject(new Error('Native audio is unavailable.')); return; }
+      if (this.closed || !this.socket || this.socket.destroyed) { reject(new Error('Native audio is unavailable.')); return; }
       const id = ++this.sequence;
       const timer = setTimeout(() => { this.requests.delete(id); reject(new Error('Native audio request timed out.')); }, 8000);
       this.requests.set(id, { resolve: value => { clearTimeout(timer); resolve(value); }, reject: error => { clearTimeout(timer); reject(error); } });
@@ -85,29 +86,38 @@ export class NativeAudio extends EventEmitter {
     return this.enqueue(async () => {
       const devices = await this.devices(); if (!devices.some(d => d.name === value.device)) throw new Error('The selected playback device is unavailable.');
       await this.request(['stop']);
+      await this.temp.cleanup();
+      this.assertOpen();
       await this.request(['set_property', 'pause', true]);
       await this.request(['set_property', 'audio-device', value.device]);
       await this.request(['set_property', 'audio-exclusive', value.exclusive]);
       await this.request(['set_property', 'volume', value.volume]);
       await this.request(['set_property', 'speed', value.speed]);
-      await mkdir(this.directory, { recursive: true });
-      const file = path.join(this.directory, `${randomUUID()}.audio`);
-      await writeFile(file, new Uint8Array(value.bytes), { flag: 'wx' }); this.files.add(file);
+      this.assertOpen();
+      const file = await this.temp.create(new Uint8Array(value.bytes));
+      if (this.closed) { await this.temp.cleanup(); throw new Error('Native audio is closed.'); }
       this.update({ id: value.id, time: value.position, duration: 0, paused: true, ended: false, ready: false, exclusive: value.exclusive, error: undefined });
       try {
         await new Promise((resolve, reject) => {
-          const finish = error => { clearTimeout(timer); this.off('event', onEvent); error ? reject(error) : resolve(); };
+          const finish = error => { clearTimeout(timer); this.off('event', onEvent); this.off('closing', onClosing); error ? reject(error) : resolve(); };
+          const onClosing = () => finish(new Error('Native audio is closed.'));
           const onEvent = event => { if (event.event === 'file-loaded') finish(); if (event.event === 'end-file' && event.reason === 'error') finish(new Error(this.state.error || 'Native audio could not open this file.')); };
-          const timer = setTimeout(() => finish(new Error('Native audio could not load the file.')), 15000);
-          this.on('event', onEvent);
+          const timer = setTimeout(() => finish(new Error('Native audio could not load the file.')), this.loadTimeoutMs);
+          this.on('event', onEvent); this.once('closing', onClosing);
           void this.request(['loadfile', file, 'replace', -1, { start: String(value.position) }]).catch(finish);
         });
         const duration = await this.request(['get_property', 'duration']);
         const output = await this.request(['get_property', 'current-ao']);
         if (output !== 'wasapi') throw new Error('WASAPI output did not start.');
         this.update({ duration: Number(duration) || 0, ready: true, paused: true });
-        for (const old of this.files) if (old !== file) { await unlink(old).catch(() => {}); this.files.delete(old); }
-      } catch (error) { await this.request(['stop']).catch(() => {}); this.update({ ready: false, paused: true, error: error.message }); throw error; }
+        await this.temp.cleanup(file);
+      } catch (error) {
+        // Delete only after the helper acknowledges release. If stop fails, retain
+        // ownership until the next successful stop or process shutdown.
+        const released = await this.request(['stop']).then(() => true, () => false);
+        if (released) await this.temp.cleanup();
+        this.update({ ready: false, paused: true, error: error.message }); throw error;
+      }
     });
   }
   setMeter(enabled) {
@@ -144,11 +154,32 @@ export class NativeAudio extends EventEmitter {
       await this.request(['set_property', command === 'play' || command === 'pause' ? 'pause' : command, command === 'play' ? false : command === 'pause' ? true : value]);
     });
   }
-  async dispose() {
-    this.closed = true; this.socket?.destroy(); this.socket = undefined;
-    const child = this.child;
-    if (child && child.exitCode === null) { const exited = new Promise(resolve => child.once('exit', resolve)); child.kill(); await Promise.race([exited, delay(3000)]); }
-    for (const file of this.files) await unlink(file).catch(() => {});
-    this.files.clear(); this.removeAllListeners();
+  dispose() {
+    if (this.disposing) return this.disposing;
+    this.closed = true;
+    this.emit('closing');
+    for (const pending of this.requests.values()) pending.reject(new Error('Native audio is closed.'));
+    this.requests.clear(); this.socket?.destroy(); this.socket = undefined;
+    this.disposing = (async () => {
+      // A pending write/start must settle before the final sweep; otherwise it
+      // could recreate files after cleanup. All queued commands are now rejected.
+      await this.serial;
+      await this.starting?.catch(() => {});
+      const child = this.child;
+      if (child && child.exitCode === null) {
+        let onExit;
+        const exited = new Promise(resolve => { onExit = resolve; child.once('exit', onExit); });
+        child.kill();
+        await Promise.race([exited, delay(3000)]);
+        child.off('exit', onExit);
+        if (child.exitCode === null && child.signalCode === null) {
+          console.warn('Native audio helper has not exited; retaining owned temporary files.');
+          return;
+        }
+      }
+      await this.temp.finish();
+      this.removeAllListeners();
+    })();
+    return this.disposing;
   }
 }

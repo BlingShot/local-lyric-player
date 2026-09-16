@@ -1,4 +1,5 @@
-import { vocalLayout, activeVocalLayout, vocalScenes } from '../../lyrics/vocalLayout';
+import '../../styles/stable-vocals.css';
+import { vocalLayout, activeVocalLayout, vocalScenes, vocalSceneRows } from '../../lyrics/vocalLayout';
 import { wordVisualProgress, rapidWord } from '../../lyrics/wordVisual';
 import { sustainedGlow } from '../../lyrics/sustained';
 import { Interlude } from './Interlude';
@@ -73,24 +74,22 @@ export function LyricsView({ document, trackId, offsetMs = 0, fontKey = '', visi
   const resumeRef = useRef(resume); resumeRef.current = resume;
   const seek = useCallback((position: number) => { resumeRef.current(); getLocalPlayer().seek(Math.max(0, position + offsetMs / 1000)); }, [offsetMs]);
   const layout = useMemo(() => vocalLayout(document.lines), [document.lines]);
-  const lanes = useMemo(() => activeVocalLayout(layout, activeIds, appearance.performerAlignment), [layout, activeIds, appearance.performerAlignment]);
+  const lanes = useMemo(() => activeVocalLayout(layout, new Set(), appearance.performerAlignment), [layout, appearance.performerAlignment]);
   const visualLines = useMemo(() => groupVocalLines(document.lines, line => line.groupId || line.id), [document.lines]);
-  const scenes = useMemo(() => vocalScenes(visualLines), [visualLines]);
+  const scenes = useMemo(() => vocalScenes(visualLines).map(scene => ({ ...scene, cells: vocalSceneRows(scene.groups, layout) })), [visualLines, layout]);
   return <div className='lyrics-reader' data-has-duet={appearance.performerAlignment && [...layout.values()].some(lane => lane.split) || undefined} data-performer-alignment={appearance.performerAlignment} data-word-by-word={appearance.wordByWord}>
     <div ref={viewport} className='lyrics-scroll' data-follow-ready='false' role='region' aria-label={t("Synced lyrics")} tabIndex={0}
       onWheel={browse} onTouchStart={browse}
       onKeyDown={event => { if (['ArrowDown', 'ArrowUp', 'PageDown', 'PageUp', 'Home', 'End'].includes(event.key)) browse(); }}>
       <ol className='lyrics-lines'>
         {scenes.map(scene => {
-          const activeGroups = scene.groups.filter(group => group.some(line => activeIds.has(line.id)));
-          const duet = appearance.performerAlignment && scene.groups.length > 1 && activeGroups.length !== 1;
-          const rows = { left: 0, right: 0 };
+          const duet = appearance.performerAlignment && scene.groups.length > 1;
           return <Fragment key={scene.id}>
             {scene.groups.flatMap(group => group.filter(line => interludes.has(line.id)).map(line => <Interlude key={line.id} id={line.id} gap={interludes.get(line.id)!} active={activeInterlude === line.id} offsetMs={offsetMs} onSeek={seek} />))}
             <li className='lyric-scene' data-duet={duet || undefined}><div className='lyric-scene-columns'>
               {scene.groups.map(group => {
-                const lane = lanes.get(group[0].id), side = lane?.side || 'left';
-                return <ol key={group[0].groupId} className='lyric-vocal-group' style={duet ? { gridColumn: side === 'right' ? 2 : 1, gridRow: ++rows[side] } : undefined}>
+                const lane = lanes.get(group[0].id), side = lane?.side || 'left', cell = scene.cells.get(group[0].groupId)!;
+                return <ol key={group[0].groupId} className='lyric-vocal-group' style={duet ? { gridColumn: side === 'right' ? 2 : 1, gridRow: `${cell.row} / span ${cell.rowSpan}` } : undefined}>
                   {group.map(line => <LyricRow key={line.id} line={line} agents={document.agents} onSeek={seek} active={activeIds.has(line.id)} showVocalLabels={showVocalLabels} wordByWord={appearance.wordByWord}
                     past={pastIds.has(line.id)} offsetMs={offsetMs} secondary={lanes.get(line.id)?.side === 'right'} split={duet}
                     performer={line.agent?.split(/\s+/).map(id => document.agents[id] || id).join(' + ')} />)}
