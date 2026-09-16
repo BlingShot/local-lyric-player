@@ -1,0 +1,66 @@
+name: Verify and build
+
+on:
+  push:
+    branches: [main, codex-issues-7-11-20260916]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: verify-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  source:
+    name: Reproducible source snapshot
+    if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name != github.repository
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - run: git archive --format=zip --output=source.zip HEAD
+      - uses: actions/upload-artifact@v4
+        with:
+          name: source-${{ github.sha }}
+          path: source.zip
+          retention-days: 3
+
+  windows:
+    name: Tests and Windows x64 portable
+    if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name != github.repository
+    runs-on: windows-latest
+    timeout-minutes: 30
+    env:
+      CSC_IDENTITY_AUTO_DISCOVERY: 'false'
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+      - run: npm ci
+      - run: npm run typecheck
+      - run: npm test
+      - name: Native resource and desktop policy tests
+        run: node --test tests/*.test.mjs
+      - name: Build Windows portable
+        run: npm run desktop:build
+      - uses: actions/upload-artifact@v4
+        with:
+          name: Lyric-Player-Windows-x64-${{ github.sha }}
+          path: release/*.exe
+          if-no-files-found: error
+          retention-days: 14
+      - uses: actions/upload-artifact@v4
+        with:
+          name: Lyric-Player-Web-${{ github.sha }}
+          path: build/
+          if-no-files-found: error
+          retention-days: 14
