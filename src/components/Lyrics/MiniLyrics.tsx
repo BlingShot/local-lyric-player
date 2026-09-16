@@ -18,7 +18,7 @@ export function MiniLyrics({ track, visible = true }: { track?: LocalTrack; visi
   const timing = useLyricOffset(saved), color = useCoverColor(track?.coverUrl);
   const fontSize = Math.max(18, appearance.fontSize - 20);
   return <div className='mini-lyrics' style={{ '--lyrics-background': color,
-    '--lyrics-font-max': `${fontSize}px`, '--lyrics-line-gap': `${Math.max(8, appearance.lineGap - 6)}px` } as CSSProperties}>
+    '--lyric-translation-size': `${Math.max(10, appearance.translationSize * .65)}px`, '--lyrics-font-max': `${fontSize}px`, '--lyrics-line-gap': `${Math.max(8, appearance.lineGap - 6)}px` } as CSSProperties}>
     <LyricBackdrop coverUrl={track?.coverUrl} />
     {track && <div className='mini-lyrics-song'><img src={trackCover(track)} alt='' /><div><strong>{track.name}</strong><span>{track.artist || t("Unknown artist")}</span></div></div>}
     <div className='lyrics-content'>

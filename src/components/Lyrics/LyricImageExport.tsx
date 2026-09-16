@@ -4,7 +4,9 @@ import { Modal } from 'antd';
 import { t } from '../../i18n';
 import type { SavedLyrics } from '../../lyrics/types';
 import type { LocalTrack } from '../../library/importFiles';
-import { drawLyricImage } from '../../lyrics/lyricImage';
+import { drawLyricImage, lyricImageSelection, LYRIC_IMAGE_THEMES, parseLyricImageTheme, type LyricImageTheme } from '../../lyrics/lyricImage';
+import { readAudioClock } from '../../lyrics/audioClock';
+import { useLyricOffset } from '../../lyrics/useLyricOffset';
 
 const COVER_ERROR = 'Unable to load the song cover. Turn off Include cover image to export without it.';
 
@@ -50,8 +52,12 @@ function useExportCover(url: string | undefined, enabled: boolean) {
 }
 
 export function LyricImageExport({ saved, track, close }: { saved: SavedLyrics; track: LocalTrack; close: () => void }) {
-  const [selected, setSelected] = useState(() => new Set(saved.document.lines.slice(0, 3).map(line => line.id)));
-  const [translation, setTranslation] = useState(true), [theme, setTheme] = useState<'night' | 'paper'>('night'), [preview, setPreview] = useState(''), [error, setError] = useState('');
+  const { offsetMs } = useLyricOffset(saved);
+  const [selected, setSelected] = useState(() => new Set(lyricImageSelection(saved.document.lines, readAudioClock().time - offsetMs / 1000)));
+  const [customTheme, setCustomTheme] = useState<LyricImageTheme>(() => { try { return parseLyricImageTheme(localStorage.getItem('lyric-image-theme') || ''); } catch { return LYRIC_IMAGE_THEMES[0]; } });
+  const [themeError, setThemeError] = useState('');
+  const themeInput = useRef<HTMLInputElement>(null);
+  const [translation, setTranslation] = useState(true), [theme, setTheme] = useState('night'), [preview, setPreview] = useState(''), [error, setError] = useState('');
   const [includeCover, setIncludeCover] = useState(true);
   const cover = useExportCover(track.coverUrl, includeCover);
   const canvas = useRef<HTMLCanvasElement>(null);
@@ -63,17 +69,29 @@ export function LyricImageExport({ saved, track, close }: { saved: SavedLyrics; 
       if (!live || !canvas.current) return;
       try {
         const family = getComputedStyle(document.querySelector('.lyric-text') || document.body).fontFamily;
-        drawLyricImage(canvas.current, { lines: saved.document.lines.filter(line => selected.has(line.id)), title: track.name, artist: track.artist || '', family, translation, theme, cover: cover.image });
+        drawLyricImage(canvas.current, { lines: saved.document.lines.filter(line => selected.has(line.id)), title: track.name, artist: track.artist || '', family, translation, theme: theme === 'custom' ? customTheme : theme, cover: cover.image });
         setPreview(canvas.current.toDataURL('image/png'));
       } catch (e) { setError((e as Error).message); }
     });
     return () => { live = false; };
-  }, [saved.document, selected, translation, theme, track.name, track.artist, cover.image, cover.error, cover.loading]);
+  }, [saved.document, selected, translation, theme, customTheme, track.name, track.artist, cover.image, cover.error, cover.loading]);
   const download = () => { if (!preview) return; const link = document.createElement('a'); link.href = preview; link.download = `${track.name.replace(/[<>:"/\\|?*\u0000-\u001f]/g, '_').slice(0, 100) || 'lyrics'}-lyrics.png`; document.body.append(link); link.click(); link.remove(); };
   return <Modal open title={t('Export lyric image')} onCancel={close} footer={null} width={960} className='lyric-image-modal'>
     <div className='lyric-image-layout'><div className='lyric-image-controls'>
       <p>{t('Select lyrics for a 1080 x 1080 PNG. Preview and download are identical.')}</p>
-      <label>{t('Image theme')}<AppSelect label={t('Image theme')} value={theme} onChange={value => setTheme(value as typeof theme)} options={[{ value: 'night', label: t('Night') }, { value: 'paper', label: t('Paper') }]} /></label>
+      <label>{t('Image theme')}<AppSelect label={t('Image theme')} value={theme} onChange={value => setTheme(value as typeof theme)} options={[...LYRIC_IMAGE_THEMES.map(item => ({ value: item.id, label: t(item.name) })), ...(customTheme.id === 'custom' ? [{ value: 'custom', label: customTheme.name }] : [])]} /></label>
+      <div className='lyric-theme-actions'><button onClick={() => themeInput.current?.click()}>{t('Import theme')}</button><button onClick={() => {
+        const selectedTheme = theme === 'custom' ? customTheme : LYRIC_IMAGE_THEMES.find(item => item.id === theme)!;
+        const url = URL.createObjectURL(new Blob([JSON.stringify({ version: 1, ...selectedTheme }, null, 2)], { type: 'application/json' }));
+        const link = document.createElement('a'); link.href = url; link.download = 'lyric-image-theme.json'; link.click(); setTimeout(() => URL.revokeObjectURL(url), 1000);
+      }}>{t('Export theme')}</button></div>
+      <input ref={themeInput} hidden type='file' accept='.json,application/json' aria-label={t('Import image theme')} onChange={async event => {
+        const file = event.target.files?.[0]; event.target.value = ''; if (!file) return;
+        try { if (file.size > 16384) throw new Error('Theme files must be smaller than 16 KB.'); const value = parseLyricImageTheme(await file.text()); setCustomTheme(value); setTheme('custom'); setThemeError('');
+          try { localStorage.setItem('lyric-image-theme', JSON.stringify({ version: 1, ...value })); } catch { setThemeError('Theme applied for this session. Storage is unavailable.'); }
+        } catch (error) { setThemeError((error as Error).message); }
+      }} />
+      {themeError && <p role='alert'>{t(themeError)}</p>}
       <label><input type='checkbox' checked={translation} onChange={e => setTranslation(e.target.checked)} />{t('Include translations')}</label>
       <label><input type='checkbox' checked={includeCover && !!track.coverUrl} disabled={!track.coverUrl} onChange={e => setIncludeCover(e.target.checked)} />{t('Include cover image')}</label>
       {!track.coverUrl && <p>{t('This song has no cover image.')}</p>}

@@ -12,6 +12,7 @@ import { NormalizationSettings } from './Normalization';
 import { DeepSeekSettings } from './DeepSeek';
 import { SpotifySettings } from './Spotify';
 import { DesktopStorageSettings } from './DesktopStorage';
+import { DiagnosticsSettings } from './Diagnostics';
 import { ListeningTimeSettings } from './ListeningTime';
 import { LocalFontPicker } from './LocalFontPicker';
 import { LyricAppearanceSettings } from './LyricAppearance';
@@ -32,7 +33,7 @@ function SettingsContent() {
     {configError && <p role='alert'>{t(configError)}</p>}
     <div hidden={tab !== 'Appearance'} className='settings-category'><header><h2>{t('Appearance')}</h2></header>
       <section><h3>{t('Interface')}</h3><div className='settings-field'><span>{t('Language')}</span><AppSelect label={t('Interface language')} value={locale.language} onChange={value => void setLanguage(value as Language)} options={[{ value: 'en', label: 'English' }, { value: 'zh-CN', label: '简体中文' }]} /></div>
-        <div className='settings-field'><span>{t('Theme')}</span><AppSelect label={t('App theme')} value={theme.mode} onChange={value => setThemeMode(value as ThemeMode)} options={[{ value: 'dark', label: t('Night') }, { value: 'light', label: t('Day') }]} /></div>
+        <div className='settings-field'><span>{t('Theme')}</span><AppSelect label={t('App theme')} value={theme.mode} onChange={value => setThemeMode(value as ThemeMode)} options={[{ value: 'dark', label: t('Night mode') }, { value: 'light', label: t('Day mode') }]} /></div>
         <label><input type='checkbox' checked={surface.glass} onChange={e => void setGlassSurface(e.target.checked)} />{t('Liquid glass')}</label>
         {(locale.error || theme.error || surface.error) && <p role='alert'>{t(locale.error || theme.error || surface.error)}</p>}
       </section><section><LocalFontPicker target='app' /></section>
@@ -42,7 +43,7 @@ function SettingsContent() {
     </div>
     <div hidden={tab !== 'Playback'} className='settings-category'><header><h2>{t('Playback')}</h2></header><section><h3>{t('Volume')}</h3><VolumeControl /></section><AudioOutputSettings active={tab === 'Playback'} /><NormalizationSettings /><ListeningTimeSettings /></div>
     <div hidden={tab !== 'Online services'} className='settings-category'><header><h2>{t('Online services')}</h2></header><SpotifySettings /><DeepSeekSettings /></div>
-    <div hidden={tab !== 'Storage'} className='settings-category'><header><h2>{t('Storage')}</h2></header><AutoImportFolder /><DesktopStorageSettings /></div>
+    <div hidden={tab !== 'Storage'} className='settings-category'><header><h2>{t('Storage')}</h2></header><AutoImportFolder /><DesktopStorageSettings /><DiagnosticsSettings /></div>
   </div></div>;
 }
 export function SettingsDrawer() {

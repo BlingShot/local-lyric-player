@@ -5,7 +5,7 @@ import { ipcMain, dialog } from 'electron';
 import { isAppUrl } from './policy.mjs';
 import { DesktopFonts } from './font-store.mjs';
 
-export function registerSettingsIpc(win, config, folders, devUrl) {
+export function registerSettingsIpc(win, config, folders, devUrl, logger) {
   const fonts = new DesktopFonts(config);
   const handle = (name, fn) => ipcMain.handle(name, (event, ...args) => {
     if (event.sender !== win.webContents || event.senderFrame !== win.webContents.mainFrame || !isAppUrl(event.senderFrame.url, devUrl)) throw new Error('Untrusted settings request.');
@@ -18,7 +18,7 @@ export function registerSettingsIpc(win, config, folders, devUrl) {
   handle('spotify:logout', () => spotify.logout());
   handle('spotify:match', track => spotify.match(track));
   win.on('closed', () => spotify.cancel());
-  const allowed = new Set(['deepseek', 'theme', 'surface', 'language', 'playback', 'lyrics-appearance', 'track-columns', 'normalization', 'typography', 'audio-output']);
+  const allowed = new Set(['deepseek', 'theme', 'surface', 'language', 'playback', 'lyrics-appearance', 'track-columns', 'normalization', 'typography', 'audio-output', 'diagnostics']);
   handle('desktop-font:get', slot => fonts.get(slot));
   handle('desktop-font:set', (slot, value) => fonts.set(slot, value));
   handle('desktop-window:zoom', direction => {
@@ -27,7 +27,12 @@ export function registerSettingsIpc(win, config, folders, devUrl) {
     win.webContents.setZoomFactor(factor); return factor;
   });
   handle('desktop-config:get', key => { if (!allowed.has(key)) throw new Error('Unknown setting.'); return config.get(key); });
-  handle('desktop-config:set', (key, value) => { if (!allowed.has(key)) throw new Error('Unknown setting.'); return config.set(key, value); });
+  handle('desktop-config:set', async (key, value) => { if (!allowed.has(key)) throw new Error('Unknown setting.'); await config.set(key, value); if (key === 'diagnostics') logger?.setDebug(value.debug); });
+  handle('desktop-log:write', entry => logger?.write(entry));
+  handle('desktop-log:read', () => logger?.read() ?? '');
+  handle('desktop-log:path', () => logger?.file ?? '');
+  handle('desktop-log:open', async () => { if (!logger) return; await logger.queue; const error = await shell.openPath(logger.directory); if (error) throw new Error(error); });
+  handle('desktop-log:devtools', () => { if (!logger?.debug) throw new Error('Enable debug mode first.'); win.webContents.openDevTools({ mode: 'detach' }); });
   handle('desktop-config:path', () => config.file);
   handle('desktop-folder:info', () => folders.info());
   let choosing = false;

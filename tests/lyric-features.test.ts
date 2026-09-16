@@ -19,9 +19,9 @@ test('sustained glow never starts early, including the real delayed background w
   assert.equal(sustainedGlow({ text: 'long', start: 5, end: 8 }, 8), 0);
   assert.equal(sustainedGlow({ text: 'short', start: 5, end: 5.3 }, 5.1), 0);
 });
-test('interludes cover intro, all overlapping voices, and outro without changing lyrics', () => {
+test('interludes cover intro and overlapping voices, omit outro, and preserve lyrics', () => {
   const before = JSON.stringify(document), gaps = interludeBefore(document, 45);
-  assert.deepEqual([...gaps.values()], [{ start: 0, end: 12, kind: 'intro' }, { start: 18, end: 30, kind: 'middle' }, { start: 35, end: 45, kind: 'outro' }]);
+  assert.deepEqual([...gaps.values()], [{ start: 0, end: 12, kind: 'intro' }, { start: 18, end: 30, kind: 'middle' }]);
   assert.equal(JSON.stringify(document), before);
   assert.equal(interludeBefore({ ...document, lines: [] }, 40).size, 0);
 });

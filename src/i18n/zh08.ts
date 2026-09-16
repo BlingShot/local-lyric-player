@@ -38,3 +38,20 @@ Object.assign(zh08, {
 });
 
 Object.assign(zh08, { 'Your listening history': '你的播放历史', 'No recent plays yet': '暂无最近播放', 'Play a song to start your local history.': '播放歌曲后，这里会显示本地播放历史。' });
+
+Object.assign(zh08, {
+  'Show translations': '显示翻译', 'Day mode': '日间模式', 'Night mode': '夜间模式',
+  'Midnight': '午夜', 'Dusk': '暮色', 'Ocean': '海洋', 'Rose': '玫瑰', 'Monochrome': '黑白',
+  'Import theme': '导入主题', 'Export theme': '导出主题', 'Import image theme': '导入图片主题',
+  'Theme files must be smaller than 16 KB.': '主题文件不能超过 16 KB。',
+  'Invalid image theme. Use the exported JSON template.': '图片主题格式无效，请使用导出的 JSON 模板。',
+  'Theme applied for this session. Storage is unavailable.': '主题已应用于本次会话，但当前无法保存。',
+  'Searching the AMLL repository index...': '正在检索 AMLL 官方仓库索引…',
+  'AMLL API is unavailable and its repository has no exact match. Using local lyrics.': 'AMLL 接口暂不可用，官方仓库未找到准确匹配，使用本地歌词。',
+  'Previous drafts': '之前的草稿',
+  'Current player lyrics opened. Your previous draft is available in Project → Previous drafts.': '已打开当前播放使用的歌词。旧草稿保存在“项目 → 之前的草稿”。',
+  'Diagnostics': '诊断', 'Debug mode': '调试模式', 'Export log': '导出日志', 'Open log folder': '打开日志文件夹', 'Developer tools': '开发者工具',
+  'Logs stay on this device. API credentials and lyric request bodies are not recorded.': '日志仅保存在本机，不记录 API 凭据和歌词请求正文。',
+  'Debug setting could not be saved.': '调试设置未能保存。',
+  'Log file could not be written. Session logs are still available.': '日志文件未能写入，仍可导出本次会话日志。',
+});

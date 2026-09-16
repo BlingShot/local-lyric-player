@@ -2,6 +2,7 @@ import { useAppSelector } from '../store/store';
 import { useLayoutEffect, useMemo, useState } from 'react';
 import { readAudioClock, subscribeAudioClock, type AudioClock } from './audioClock';
 import { interludeBefore } from './interludes';
+import { INTERLUDE_EXIT_SECONDS } from './interludeProgress';
 import { lineEnd, lyricFrame } from './timeline';
 import type { LyricDocument } from './types';
 
@@ -10,13 +11,14 @@ export function useLyricFrame(document: LyricDocument, trackId: string, offsetMs
   const interludes = useMemo(() => interludeBefore(document, duration - offsetMs / 1000), [document, duration, offsetMs]);
   const boundaries = useMemo(() => [...new Set([
     ...document.lines.flatMap(line => [line.start, line.end ?? Infinity]),
-    ...[...interludes.values()].flatMap(gap => [gap.start, gap.end]),
+    ...[...interludes.values()].flatMap(gap => [gap.start, gap.end - INTERLUDE_EXIT_SECONDS, gap.end]),
   ])].sort((a, b) => a - b), [document, interludes]);
   const frameAt = ({ time: actualTime, duration: actualDuration }: AudioClock) => {
     const time = actualTime - offsetMs / 1000, duration = actualDuration - offsetMs / 1000;
     const frame = lyricFrame(document, time, duration);
     const activeInterlude = !frame.activeIds.size ? [...interludes].find(([, gap]) => time >= gap.start && time < gap.end)?.[0] : undefined;
-    return { ...frame, activeInterlude, pastIds: new Set(document.lines.filter(line => time >= lineEnd(line, duration)).map(line => line.id)) };
+    const leavingInterlude = activeInterlude && time >= interludes.get(activeInterlude)!.end - INTERLUDE_EXIT_SECONDS ? activeInterlude : undefined;
+    return { ...frame, activeInterlude, leavingInterlude, pastIds: new Set(document.lines.filter(line => time >= lineEnd(line, duration)).map(line => line.id)) };
   };
   const [frame, setFrame] = useState(() => frameAt(readAudioClock()));
   useLayoutEffect(() => {

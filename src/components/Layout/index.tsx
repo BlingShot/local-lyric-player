@@ -36,21 +36,21 @@ export function AppLayout({ children }: { children: ReactNode }) {
   usePageEntrance(mainRef, location.pathname);
   const ui = useAppSelector(state => state.ui);
   const playbackFailed = useAppSelector(state => !!state.player.error);
-  useLyricsImmersion(ui.lyricsFullscreen && location.pathname === '/lyrics', ui.settingsOpen || ui.queueOpen || ui.importOpen || playbackFailed);
+  useLyricsImmersion(ui.lyricsFullscreen && location.pathname === '/lyrics', ui.settingsOpen || ui.queueOpen || ui.importOpen || ui.detailsOpen || playbackFailed);
   const { mobile, tablet } = useViewport();
   const compact = ui.libraryCollapsed;
   const libraryPanel = usePanelRef();
   const detailsPanel = usePanelRef();
   const expandedLibrarySize = useRef(22);
   const expandedDetailsSize = useRef(25);
-  const desktopDetailsOpen = ui.detailsOpen && !tablet;
+  const desktopDetailsOpen = ui.detailsOpen && !tablet && !ui.lyricsFullscreen;
   const [resizingPanels, setResizingPanels] = useState(false);
   useEffect(() => {
     const changed = () => { if (!document.fullscreenElement) void exitLyricsFullscreen(); };
-    const escape = (event: KeyboardEvent) => { if (event.key === 'Escape') void exitLyricsFullscreen(); };
+    const escape = (event: KeyboardEvent) => { if (event.key === 'Escape' && !event.defaultPrevented && !ui.detailsOpen && !ui.settingsOpen && !ui.queueOpen && !ui.importOpen) void exitLyricsFullscreen(); };
     document.addEventListener('fullscreenchange', changed); document.addEventListener('keydown', escape);
     return () => { document.removeEventListener('fullscreenchange', changed); document.removeEventListener('keydown', escape); };
-  }, [dispatch]);
+  }, [dispatch, ui.detailsOpen, ui.settingsOpen, ui.queueOpen, ui.importOpen]);
   useEffect(() => {
     if (location.pathname === '/lyrics' || !ui.lyricsFullscreen) return;
     resetLyricsFullscreen();
@@ -107,8 +107,8 @@ export function AppLayout({ children }: { children: ReactNode }) {
 
       <Drawer title={t("Your library")} open={mobile && ui.libraryDrawerOpen && !ui.lyricsFullscreen} placement='left' width={300}
         onClose={() => dispatch(uiActions.closeLibraryDrawer())}><Library drawer /></Drawer>
-      <Drawer title={t("File details")} open={tablet && ui.detailsOpen && !ui.lyricsFullscreen} placement='right' width={320}
-        onClose={() => dispatch(uiActions.toggleDetails())}><FileDetails visible={tablet && ui.detailsOpen && !ui.lyricsFullscreen} /></Drawer>
+      <Drawer title={t("File details")} open={(tablet || ui.lyricsFullscreen) && ui.detailsOpen} placement='right' width={320}
+        onClose={() => dispatch(uiActions.toggleDetails())}><FileDetails visible={(tablet || ui.lyricsFullscreen) && ui.detailsOpen} /></Drawer>
     </div>
   );
 }

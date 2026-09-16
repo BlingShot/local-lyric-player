@@ -18,7 +18,8 @@ export function useMusicPulse(surface: RefObject<HTMLDivElement | null>, enabled
     if (!element) return;
     element.style.setProperty('--music-pulse', '0');
     if (!enabled || !allowed || output.busy) return;
-    const audio = getLocalAudioElement(), native = output.settings.device !== 'browser';
+    const audio = getLocalAudioElement();
+    const native = (audio as HTMLAudioElement & { backendKind?: string }).backendKind === 'native';
     const desktop = window.localMusicDesktop;
     if (native && (!desktop?.nativeAudioMeter || !desktop.nativeAudioEnergy)) return;
     let disposed = false, frame = 0, nativeReady = false, pending = false, rms = 0;
@@ -41,6 +42,9 @@ export function useMusicPulse(surface: RefObject<HTMLDivElement | null>, enabled
       // Soft attack/release, a capped background-only wash, never a white flash.
       envelope += (target - envelope) * (1 - Math.exp(-dt / (target > envelope ? .14 : .55)));
       element.style.setProperty('--music-pulse', envelope.toFixed(4));
+      const phase = Number.isFinite(audio.currentTime) ? audio.currentTime * .16 : 0;
+      element.style.setProperty('--music-x', `${Math.sin(phase) * envelope * 4}%`);
+      element.style.setProperty('--music-y', `${Math.cos(phase * .73) * envelope * 3}%`);
       if (active || envelope > .001) frame = requestAnimationFrame(draw);
       else element.style.setProperty('--music-pulse', '0');
     };

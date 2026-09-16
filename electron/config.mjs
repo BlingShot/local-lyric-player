@@ -1,7 +1,7 @@
 import { readFile, writeFile, rename, unlink } from 'node:fs/promises';
 import path from 'node:path';
 
-const sections = new Set(['deepseek', 'theme', 'surface', 'language', 'playback', 'lyrics-appearance', 'track-columns', 'normalization', 'import-folder', 'fonts', 'spotify', 'typography', 'audio-output']);
+const sections = new Set(['deepseek', 'theme', 'surface', 'language', 'playback', 'lyrics-appearance', 'track-columns', 'normalization', 'import-folder', 'fonts', 'spotify', 'typography', 'audio-output', 'diagnostics']);
 
 // Small preferences only. Music, scan history and per-song projects stay in IndexedDB.
 export class DesktopConfig {
@@ -40,6 +40,7 @@ export class DesktopConfig {
     const task = this.queue.catch(() => {}).then(async () => {
       const data = await this.load();
       let saved = value;
+      if (section === 'diagnostics' && (!value || typeof value.debug !== 'boolean' || Object.keys(value).some(key => key !== 'debug'))) throw new Error('Invalid debug settings.');
       if (section === 'spotify') {
         if (!value || JSON.stringify(value).length > 16000) throw new Error('Invalid Spotify session.');
         if (value.refreshToken && !this.crypto.isEncryptionAvailable()) throw new Error('Windows credential encryption is unavailable.');

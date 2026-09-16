@@ -1,3 +1,4 @@
+import { diagnosticLog } from '../desktop/diagnostics';
 import { useEffect, useState } from 'react';
 import type { LocalTrack } from '../library/importFiles';
 import { resolveAmll } from './amll';
@@ -20,7 +21,7 @@ export function useResolvedLyrics(track?: LocalTrack) {
       job = { controller: new AbortController(), listeners: new Set(), status: '', done: false, until: 0 }; jobs.set(key, job);
       const current = job;
       const notify = (text: string) => { if (current.controller.signal.aborted) return; current.status = text; current.listeners.forEach(listener => listener(text)); };
-      void resolveAmll(track, current.controller.signal, notify).catch(error => { if (!current.controller.signal.aborted) notify(error instanceof Error ? error.message : 'AMLL search failed. Using local lyrics.'); })
+      void resolveAmll(track, current.controller.signal, notify).catch(error => { if (!current.controller.signal.aborted) { diagnosticLog('warn', 'amll', error); notify(error instanceof Error ? error.message : 'AMLL search failed. Using local lyrics.'); } })
         .finally(() => {
           current.done = true; current.until = Date.now() + 60000;
           // One deadline per shared request: mounting the sidebar must not restart the toast.

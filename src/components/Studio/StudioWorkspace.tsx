@@ -18,7 +18,9 @@ import { getLocalAudioElement, getLocalPlayer, importStudioAudio, playLocalTrack
 import { store, useAppSelector } from '../../store/store';
 import { readLyrics } from '../../lyrics/repository';
 import { importProjectLrc } from '../../studio/projectImportLrc';
-import { useSavedLyrics } from '../../lyrics/useSavedLyrics';
+import { useResolvedLyrics } from '../../lyrics/useResolvedLyrics';
+import { backupStudioSource, studioSourceBackups, type StudioSourceBackup } from '../../studio/repository';
+import { playerLyricKey, studioSourceFormat } from '../../studio/playerSource';
 import { subscribeAudioClock } from '../../lyrics/audioClock';
 import { useStudioDraft } from '../../studio/useStudioDraft';
 import { useWordRecording } from '../../studio/useWordRecording';
@@ -29,11 +31,14 @@ import { lineBounds, validateProject, type ProjectIssue, type TtmlMode } from '.
 
 type ExportFormat = 'word' | 'line' | 'lrc' | 'both';
 interface Download { name: string; url: string }
-export function StudioWorkspace({ trackId, changeTrack, seed }: { trackId: string; changeTrack: (id: string, seed?: StudioProject) => void; seed?: StudioProject }) {
+export function StudioWorkspace({ trackId, changeTrack, seed, preferDraft = false }: { trackId: string; changeTrack: (id: string, seed?: StudioProject) => void; seed?: StudioProject; preferDraft?: boolean }) {
   const track = useAppSelector(state => state.library.tracks.find(item => item.id === trackId));
   const audioName = track?.fileName || track?.name || seed?.audioName || '';
   const edit = useStudioDraft(trackId, audioName, seed), { draft, commit, select } = edit;
-  const savedLyrics = useSavedLyrics(track?.id, track?.embeddedLyricsChecked), autoImport = useRef(false), initialMetadata = useRef(false);
+  const savedLyrics = useResolvedLyrics(track), autoImport = useRef(!!seed || preferDraft), initialMetadata = useRef(false);
+  const sourceImport = useRef<{ key: string; updatedAt: number } | undefined>(undefined);
+  const [sourceBackups, setSourceBackups] = useState<StudioSourceBackup[]>([]);
+  useEffect(() => { let live = true; void studioSourceBackups(trackId).then(value => { if (live) setSourceBackups(value); }).catch(() => {}); return () => { live = false; }; }, [trackId]);
   const duration = useAppSelector(s => s.player.currentId === trackId ? s.player.duration : 0), currentId = useAppSelector(s => s.player.currentId);
   const canUseAudio = currentId === trackId && duration > 0 && !track?.unavailable;
   const [writeCopy, setWriteCopy] = useState(false), [exportError, setExportError] = useState('');
@@ -60,15 +65,39 @@ export function StudioWorkspace({ trackId, changeTrack, seed }: { trackId: strin
   }, [draft, track]);
   const importSaved = (saved: NonNullable<typeof savedLyrics.saved>) => {
     const p = saved.document.format === 'ttml' ? importProjectTtml(saved.source, trackId, saved.fileName) : importProjectLrc(saved.source, trackId, audioName);
-    return saved.offsetMs ? shiftProject(p, saved.offsetMs, 'all') : p;
+    const shifted = saved.offsetMs ? shiftProject(p, saved.offsetMs, 'all') : p;
+    return { ...shifted, settings: { ...shifted.settings, mode: saved.document.timing === 'line' ? 'line' as const : 'word' as const } };
   };
   useEffect(() => {
-    if (autoImport.current || !draft || !track) return;
-    if (draft.lines.some(l => l.text || l.startMs !== null || l.endMs !== null)) { autoImport.current = true; return; }
-    if (savedLyrics.loading || savedLyrics.error || !savedLyrics.saved && !track.embeddedLyricsChecked) return;
-    autoImport.current = true;
-    if (savedLyrics.saved) { try { const p = importSaved(savedLyrics.saved); if (p.source?.notices.length) setPreview(p); else commit(v => ({ ...p, audioName, metadata: { ...v.metadata, ...p.metadata, title: p.metadata.title || v.metadata.title } })); } catch (e) { setMessage((e as Error).message); } }
+    const current = edit.current.current;
+    if (!current || !track || savedLyrics.loading || savedLyrics.error || !savedLyrics.saved) return;
+    if (autoImport.current && (!sourceImport.current || sourceImport.current.updatedAt !== current.updatedAt)) return;
+    const saved = savedLyrics.saved;
+    let cancelled = false;
+    void (async () => {
+      const key = await playerLyricKey(saved);
+      if (cancelled) return;
+      if (current.playerSource?.key === key) { autoImport.current = true; setSurface(saved.document.format); return; }
+      // Do not race typing, sync recording or an explicitly restored/imported draft.
+      if (edit.current.current?.updatedAt !== current.updatedAt) return;
+      const imported = importSaved(saved);
+      const meaningful = current.lines.some(line => line.text || line.startMs !== null || line.endMs !== null);
+      let backups: StudioSourceBackup[] | undefined;
+      if (meaningful) { await backupStudioSource(current); backups = await studioSourceBackups(trackId); }
+      if (cancelled || edit.current.current?.updatedAt !== current.updatedAt) return;
+      autoImport.current = true;
+      setSurface(saved.document.format);
+      commit(previous => ({ ...imported, audioName, metadataInitialized: true,
+        playerSource: { key, format: saved.document.format },
+        metadata: { ...previous.metadata, ...imported.metadata, title: imported.metadata.title || previous.metadata.title || track.name,
+          artist: imported.metadata.artist || previous.metadata.artist || track.artist || '', album: imported.metadata.album || previous.metadata.album || track.album || '' } }));
+      sourceImport.current = { key, updatedAt: edit.current.current!.updatedAt };
+      if (backups) { setSourceBackups(backups); setMessage('Current player lyrics opened. Your previous draft is available in Project → Previous drafts.'); }
+      else if (imported.source?.notices.length) setMessage(imported.source.notices.join(' '));
+    })().catch(error => { if (!cancelled) { autoImport.current = true; setMessage((error as Error).message); } });
+    return () => { cancelled = true; };
   }, [draft, track, savedLyrics.loading, savedLyrics.error, savedLyrics.saved]);
+  useEffect(() => { if (draft && (seed || preferDraft)) setSurface(studioSourceFormat(draft)); }, [!!draft]);
   useEffect(() => {
     if (!loop || !canUseAudio || !draft) return;
     const line = draft.lines.find(l => l.id === draft.selectedId); if (!line) return;
@@ -151,10 +180,11 @@ export function StudioWorkspace({ trackId, changeTrack, seed }: { trackId: strin
       </div><span className='studio-save-status' role='status'>{t(edit.status)}</span></div>
       <div className='studio-tools'><div><button disabled={!draft} onClick={() => setPaste(true)}>{t("Paste lyrics")}</button><button disabled={!draft} onClick={() => lyricInput.current?.click()}>{t("Import LRC / TTML")}</button>
         <button disabled={!draft} onClick={() => audioInput.current?.click()}>{t("Choose audio")}</button>
-        <AppDropdown trigger={['click']} menu={{ items: [{ key: 'load', label: t("Load song lyrics"), disabled: !track }, { key: 'save', label: t("Save project file") }, { key: 'restore', label: t("Restore project") }, { type: 'divider' }, { key: 'clear', label: t("Clear project"), danger: true }], onClick: async ({ key }) => {
-          if (key === 'load') { try { const saved = await readLyrics(trackId); if (saved) setPreview(importSaved(saved)); else setMessage('No saved song lyrics.'); } catch (e) { setMessage((e as Error).message); } }
+        <AppDropdown trigger={['click']} menu={{ items: [{ key: 'load', label: t("Load song lyrics"), disabled: !track }, { key: 'save', label: t("Save project file") }, { key: 'restore', label: t("Restore project") }, { key: 'backups', label: t('Previous drafts'), disabled: !sourceBackups.length, children: sourceBackups.map((backup, index) => ({ key: `backup:${index}`, label: `${new Date(backup.project.updatedAt).toLocaleString()} · ${backup.project.source?.fileName || backup.project.audioName}` })) }, { type: 'divider' }, { key: 'clear', label: t("Clear project"), danger: true }], onClick: async ({ key }) => {
+          if (key === 'load') { try { const saved = await readLyrics(trackId); if (saved) { setPreview(importSaved(saved)); setSurface(saved.document.format); } else setMessage('No saved song lyrics.'); } catch (e) { setMessage((e as Error).message); } }
           if (key === 'save' && draft) download(makeFile(`${exportName(audioName || draft.audioName)}.lyric-studio.json`, JSON.stringify(draft, null, 2), 'application/json;charset=utf-8'));
           if (key === 'restore') projectInput.current?.click();
+          if (key.startsWith('backup:')) { const backup = sourceBackups[Number(key.slice(7))]; if (backup) { setPreview(backup.project); setSurface(studioSourceFormat(backup.project)); } }
           if (key === 'clear') { recording.cancel(); autoImport.current = true; commit(p => newProject(p.trackId, p.audioName)); setSelectedIds([]); }
         } }}><button disabled={!draft}>{t("Project ▾")}</button></AppDropdown>
       </div></div>
@@ -201,7 +231,7 @@ export function StudioWorkspace({ trackId, changeTrack, seed }: { trackId: strin
         const retain = append && p.lines.some(l => l.text || l.startMs !== null); if (lines.length + (retain ? p.lines.length : 0) > 5000) throw new Error('Use at most 5,000 lines.');
         return { ...p, lines: [...(retain ? p.lines : []), ...lines], sections: [...(retain ? p.sections : []), ...sections], boundaries: retain ? p.boundaries : { startMs: null, endMs: null }, selectedId: retain ? lines[0]?.id || '' : LYRIC_START }; }); setPaste(false); setValidation(undefined);
     }} />}
-    <Modal open={!!preview} title={t("Import into Lyric Studio")} onCancel={() => setPreview(undefined)} footer={null}><p>{preview?.lines.length} {t("vocal lines. Supported word times, Performers, background vocals and annotations are retained. Undo restores your current project.")}</p>{preview?.source?.notices.map((n, i) => <p key={i}>{n}</p>)}<p className='studio-import-sample'>{preview?.lines.slice(0, 3).map(l => l.text).join('\n')}</p><button className='white-button' onClick={() => { if (preview) commit(p => ({ ...preview, trackId: p.trackId, audioName: p.audioName || preview.audioName })); setPreview(undefined); setValidation(undefined); setSelectedIds([]); autoImport.current = true; }}>{t("Use imported project")}</button></Modal>
+    <Modal open={!!preview} title={t("Import into Lyric Studio")} onCancel={() => setPreview(undefined)} footer={null}><p>{preview?.lines.length} {t("vocal lines. Supported word times, Performers, background vocals and annotations are retained. Undo restores your current project.")}</p>{preview?.source?.notices.map((n, i) => <p key={i}>{n}</p>)}<p className='studio-import-sample'>{preview?.lines.slice(0, 3).map(l => l.text).join('\n')}</p><button className='white-button' onClick={() => { if (preview) commit(p => ({ ...preview, trackId: p.trackId, audioName: p.audioName || preview.audioName, playerSource: p.playerSource })); setPreview(undefined); setValidation(undefined); setSelectedIds([]); autoImport.current = true; }}>{t("Use imported project")}</button></Modal>
     <Modal open={!!exportOpen} title={t(writeCopy ? "Write to saved audio copy" : "Export compatibility")} onCancel={() => setExportOpen(undefined)} footer={null}>
       {exportError && <p className='studio-warning' role='alert'>{t(exportError)}</p>}
       {writeCopy && <p>{t("Writes lyrics into the player's saved FLAC, MP3 or WAV copy. The original file is unchanged. You can download the updated audio after saving.")}</p>}

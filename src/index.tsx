@@ -1,3 +1,4 @@
+import { initializeDiagnostics } from './desktop/diagnostics';
 import { initializeTypography } from './theme/typography';
 import { initializeAudioOutput } from './player/audioOutput';
 import { StrictMode } from 'react';
@@ -13,6 +14,7 @@ import { initializeDesktopZoom } from './desktop/zoom';
 import { initializeLocalFonts } from './theme/fonts';
 import { initializeLanguage } from './i18n';
 
+void initializeDiagnostics();
 void initializeDeepSeekConfig();
 void initializeThemeConfig();
 void initializeSurfaceConfig();

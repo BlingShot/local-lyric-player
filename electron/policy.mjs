@@ -16,8 +16,13 @@ export function allowedRequest(value, devUrl) {
   if (isAppUrl(value, devUrl)) return true;
   if (value.startsWith('blob:localmusic://app/') || value.startsWith('data:')) return true;
   if (devUrl && (value.startsWith(`blob:${devUrl}`) || value.startsWith(devUrl.replace('http:', 'ws:')))) return true;
-  // Existing opt-in lyric analysis is the only remote application request.
+  // Only the explicit analysis endpoint and official lyric resources may leave the app.
   try { const url = new URL(value); if (url.origin === 'https://api.amll.dev' && ['/v1/lyrics/get', '/v1/lyrics/search'].includes(url.pathname) && !url.username && !url.password) return true; } catch {}
+  try {
+    const url = new URL(value), root = '/amll-dev/amll-ttml-db/main/';
+    if (url.origin === 'https://raw.githubusercontent.com' && !url.username && !url.password && !url.search && !url.hash &&
+        (url.pathname === root + 'metadata/raw-lyrics-index.jsonl' || new RegExp('^' + root + 'raw-lyrics/[\\w-]+\\.ttml$').test(url.pathname))) return true;
+  } catch {}
   return value === 'https://api.deepseek.com/chat/completions';
 }
 

@@ -22,20 +22,11 @@
 .lyrics-remote-notice button { color: inherit; flex: 0 0 auto; padding: 2px 0; font: inherit; text-decoration: underline; text-underline-offset: 3px; }
 [data-theme=light] .lyrics-remote-notice { background: #f7f7f7; color: #202124; }
 .mini-lyrics .lyrics-remote-notice { inset-inline: 10px; max-width: calc(100% - 20px); padding: 8px 12px; }
-.lyrics-lines .lyric-interlude.lyric-dots { display: grid; grid-template-rows: 0fr; min-height: 0; height: auto; padding: 0; margin: 0; opacity: 1; color: var(--lyrics-highlight); transform: none; transition: grid-template-rows 560ms cubic-bezier(.22,1,.36,1), margin 560ms cubic-bezier(.22,1,.36,1); }
-.lyrics-lines .lyric-dots:is([data-phase=entering], [data-phase=visible], [data-phase=leaving]) { grid-template-rows: 1fr; margin-block: 16px; }
-.lyrics-lines .lyric-dots[data-kind=intro][data-phase=visible] { transition: none; }
-.lyrics-lines .lyric-dots:is([data-phase=collapsing], [data-phase=hidden]) { transition-duration: 320ms; }
-.lyric-dots-content { overflow: hidden; min-height: 0; visibility: hidden; }
-.lyric-dots:is([data-phase=entering], [data-phase=visible], [data-phase=leaving]) > .lyric-dots-content { visibility: visible; }
-.lyric-dots:is([data-phase=visible], [data-phase=leaving]) > .lyric-dots-content { overflow: visible; }
-.lyric-dots-content button { display: flex; gap: 10px; align-items: center; width: fit-content; min-width: 90px; min-height: 48px; padding: 10px 6px; background: none; border: 0; color: inherit; cursor: pointer; opacity: 0; transform-origin: left center; }
-.lyric-dots[data-phase=visible] .lyric-dots-content button { opacity: 1; transform: none; }
-.lyric-dots[data-phase=entering] .lyric-dots-content button { animation: lyric-interlude-enter 620ms cubic-bezier(.22,1,.36,1) both; }
-.lyric-dots[data-phase=leaving] .lyric-dots-content button { animation: lyric-interlude-exit 440ms cubic-bezier(.4,0,.2,1) both; }
+.lyrics-lines .lyric-interlude.lyric-dots { display: block; height: calc(var(--interlude-space, 0) * 90px); min-height: 0; padding: 0; margin: 0; opacity: 1; color: var(--lyrics-highlight); transform: none; transition: none; overflow: clip; }
+.lyric-dots-content { height: 90px; display: flex; align-items: center; min-height: 0; }
+.lyric-dots-content button { display: flex; gap: 10px; align-items: center; width: fit-content; min-width: 90px; min-height: 48px; padding: 10px 6px; background: none; border: 0; color: inherit; cursor: pointer; opacity: var(--interlude-opacity, 0); transform: translateY(var(--interlude-y, 0px)) scale(var(--interlude-scale, 1)); transform-origin: left center; transition: none; animation: none; }
 .lyric-dots-content button:focus-visible { outline: 2px solid currentColor; outline-offset: -2px; border-radius: 8px; }
+.lyric-dots[data-phase=hidden] { visibility: hidden; }
 .lyric-dot { display: block; width: 12px; height: 12px; background: currentColor; border-radius: 50%; opacity: .25; }
-@keyframes lyric-interlude-enter { 0% { opacity: 0; transform: translateY(12px) scale(.82); } 65% { opacity: 1; transform: translateY(-1px) scale(1.025); } 100% { opacity: 1; transform: none; } }
-@keyframes lyric-interlude-exit { 0% { opacity: 1; transform: none; } 30% { opacity: 1; transform: translateY(-2px) scale(1.14); } 100% { opacity: 0; transform: translateY(-9px) scale(.7); } }
 @media (max-width: 650px) { .lyric-image-layout { grid-template-columns: minmax(0, 1fr); }.lyric-image-preview { grid-row: 1; }.lyric-image-lines { max-height: 180px; } }
 @media (prefers-reduced-motion: reduce) { .lyric-dots, .lyric-dots-content button, .lyrics-remote-notice { transition: none !important; animation: none !important; transform: none !important; }.lyric-dot { animation: none !important; transform: none !important; }.lyric-dots:is([data-phase=entering], [data-phase=visible]) .lyric-dots-content button { opacity: 1; } }
