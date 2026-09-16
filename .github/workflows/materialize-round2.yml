@@ -1,0 +1,69 @@
+name: Materialize reviewed round two changes
+on:
+  push:
+    branches: [codex-materialize-round2-20260916]
+    paths: ['.github/round2-delta/**', '.github/workflows/materialize-round2.yml']
+permissions:
+  contents: write
+jobs:
+  materialize:
+    if: github.repository == 'BlingShot/local-lyric-player' && github.ref == 'refs/heads/codex-materialize-round2-20260916'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: codex-materialize-round2-20260916
+      - name: Verify and materialize reviewed source deltas
+        shell: bash
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path, PurePosixPath
+          import hashlib
+          root = Path.cwd()
+          pending = {}
+          for index in range(7):
+              lines = (root / f'.github/round2-delta/{index}.txt').read_bytes().decode('utf-8').splitlines(keepends=True)
+              i = 0
+              while i < len(lines):
+                  header = lines[i].rstrip('\n').split('\t'); i += 1
+                  assert len(header) == 4 and header[0] == 'FILE', (index, i, header)
+                  _, name, before, after = header
+                  path = PurePosixPath(name)
+                  assert not path.is_absolute() and '..' not in path.parts and '\\' not in name
+                  assert path.parts[0] in {'src', 'electron', 'scripts', 'tests'} or name == '.github/workflows/verify-build.yml'
+                  target = root / name
+                  assert not target.is_symlink() and target.resolve().is_relative_to(root)
+                  assert name not in pending
+                  data = target.read_bytes() if target.exists() else b''
+                  assert hashlib.sha256(data).hexdigest() == before, ('before hash', name)
+                  original = data.decode('utf-8').splitlines(keepends=True)
+                  edits = []; last_end = 0
+                  while i < len(lines) and lines[i] != 'END\n':
+                      record = lines[i].rstrip('\n').split('\t'); i += 1
+                      assert len(record) == 4 and record[0] == 'EDIT', (name, i, record)
+                      start, end, count = map(int, record[1:])
+                      assert 0 <= last_end <= start <= end <= len(original) and count >= 0 and i + count <= len(lines)
+                      edits.append((start, end, lines[i:i+count])); i += count; last_end = end
+                  assert i < len(lines) and lines[i] == 'END\n'; i += 1
+                  for start, end, replacement in reversed(edits):
+                      original[start:end] = replacement
+                  result = ''.join(original).encode('utf-8')
+                  assert hashlib.sha256(result).hexdigest() == after, ('after hash', name)
+                  pending[name] = result
+          assert len(pending) == 41, len(pending)
+          for name, data in pending.items():
+              target = root / name; target.parent.mkdir(parents=True, exist_ok=True); target.write_bytes(data)
+          print(f'Verified and materialized {len(pending)} files. No application code executed.')
+          PY
+      - name: Commit source on the temporary branch only
+        shell: bash
+        run: |
+          git config user.name 'BlingShot'
+          git config user.email '104744490+BlingShot@users.noreply.github.com'
+          # Workflow changes are deliberately left for the authorized connector.
+          git add src electron scripts tests
+          git diff --cached --check
+          git commit -m 'fix: stagger performer lyrics and resolve issues #1-6'
+          git push origin HEAD:refs/heads/codex-materialize-round2-20260916
+          git rev-parse HEAD

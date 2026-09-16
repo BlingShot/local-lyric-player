@@ -1,0 +1,177 @@
+FILE	.github/workflows/verify-build.yml	da2f29bf63f950e1864e4685a2703e650975e4746b1e25786eedc1fa8f120095	60a2378b7fc07a82f88886e25627ebb98ddbcbc1e361f8216ba31d71989ebc8e
+EDIT	59	59	2
+      - name: Round two playback and persistence regressions
+        run: node scripts/test-round2-regressions.mjs
+EDIT	77	78	3
+          path: |
+            test-results/issues-7-11/
+            test-results/issues-1-6/
+END
+FILE	electron/folder-import.mjs	53b19a4a6fbd1e95336f3bb514cc6d8b02c695cd2762f55ea432eb5663160f05	beb723f34e64f9de029f677fc7a3398b565dadccea857ff5d92335ec5805d1c1
+EDIT	58	59	1
+      files.push({ ...metadata, relativePath: path.relative(scan.root, next.value.path).split(path.sep).join('/'), url: `localmusic://app/__folder/${id}/${token}` });
+END
+FILE	electron/native-audio-ipc.mjs	c252d382edbe87798e76225a23d7feab85c419076987aa216fac8fe8b190c139	2c834c3ae07cf788185032e8c851095d849a8e2b7396b3f2dab17365ab92b914
+EDIT	0	0	1
+import { audioResult } from './playback-errors.mjs';
+EDIT	32	35	3
+  handle('native-audio:load', value => audioResult(() => { if (!value?.context) throw new Error('Missing native load context.'); return audio.load(value); }));
+  handle('native-audio:command', (command, value, context) => audioResult(() => { if (!context) throw new Error('Missing native command context.'); return audio.command(command, value, context); }));
+  win.webContents.on('did-start-navigation', (_event, _url, inPlace, mainFrame) => { if (mainFrame && !inPlace) { audio.resetCommands(); void audio.command('stop').then(() => audio.setMeter(false)).catch(() => {}); } });
+END
+FILE	electron/native-audio.mjs	36b54559792f9fd1156067b5fe157eb3b55761e494c2c41264914781c6d50bb9	fb5c306396f00192d03bd9ee6b81c1b2f637aa169396e1cae8f9c8268ac5d0e1
+EDIT	0	0	2
+import { PlaybackFault, faultInfo, mpvFault } from './playback-errors.mjs';
+import { NativeCommandGuard, cancelled } from './native-command-guard.mjs';
+EDIT	12	13	1
+    this.state = { id: '', time: 0, duration: 0, paused: true, ended: false, ready: false, exclusive: false }; this.closed = false; this.meterEnabled = false; this.guard = new NativeCommandGuard();
+EDIT	15	16	1
+  assertOpen() { if (this.closed) throw new PlaybackFault('cancelled', 'Native audio is closed.'); }
+EDIT	18	19	1
+    if (this.closed) throw new PlaybackFault('cancelled', 'Native audio is closed.');
+EDIT	31	33	2
+        for (const pending of this.requests.values()) pending.reject(new PlaybackFault('backend-stopped', 'Native audio process stopped.')); this.requests.clear();
+        if (!this.closed) this.update({ ready: false, paused: true, error: { kind: 'backend-stopped', message: 'Native audio stopped. Select the device again to retry.' } });
+EDIT	40	41	1
+      if (this.closed) { socket.destroy(); child.kill(); throw new PlaybackFault('cancelled', 'Native audio is closed.'); }
+EDIT	43	44	1
+      socket.on('error', error => { if (!this.closed) this.update({ error: faultInfo(error), paused: true, ready: false }); });
+EDIT	53	54	1
+      for (const [index, property] of ['time-pos', 'duration', 'pause', 'eof-reached', 'current-ao'].entries()) await this.request(['observe_property', index + 1, property]);
+EDIT	63	63	2
+      if (message.name === 'current-ao' && this.state.ready && !this.state.ended && message.data !== 'wasapi')
+        this.update({ ready: false, paused: true, error: { kind: 'device-unavailable', message: 'The audio output was lost. Reconnect or select an output, then retry this song.' } });
+EDIT	66	67	1
+    if (message.event === 'end-file' && message.reason === 'error') this.update({ ready: false, paused: true, error: faultInfo(mpvFault(message.file_error || message.error, this.state.exclusive)) });
+EDIT	71	72	1
+      if (this.closed || !this.socket || this.socket.destroyed) { reject(new PlaybackFault('backend-stopped', 'Native audio is unavailable.')); return; }
+EDIT	73	74	1
+      const timer = setTimeout(() => { this.requests.delete(id); reject(new PlaybackFault('timeout', 'The native audio backend did not respond. Check the output and retry.')); }, 8000);
+EDIT	85	85	4
+    let token; const guard = this.guard;
+    try { if (value.context) { token = guard.accept(value.context); if (token.id !== value.id) throw cancelled(); this.emit('intent-changed'); } }
+    catch (error) { return Promise.reject(error); }
+    const current = () => { this.assertOpen(); if (token) { if (guard !== this.guard) throw cancelled(); guard.check(token, 'load'); } };
+EDIT	86	87	3
+      current();
+      const devices = await this.devices(); current(); if (!devices.some(d => d.name === value.device)) throw new PlaybackFault('device-unavailable', 'The selected playback device is unavailable.');
+      this.update({ ready: false, paused: true });
+EDIT	89	90	1
+      current();
+EDIT	95	96	1
+      current();
+EDIT	97	98	1
+      try { current(); } catch (error) { await this.temp.cleanup(); throw error; }
+EDIT	101	106	6
+          const finish = error => { clearTimeout(timer); this.off('event', onEvent); this.off('closing', onClosing); this.off('intent-changed', onIntent); error ? reject(error) : resolve(); };
+          const onClosing = () => finish(new PlaybackFault('cancelled', 'Native audio is closed.'));
+          const onIntent = () => { try { current(); } catch (error) { finish(error); } };
+          const onEvent = event => { if (event.event === 'file-loaded') finish(); if (event.event === 'end-file' && event.reason === 'error') finish(new PlaybackFault(this.state.error?.kind || 'backend-stopped', this.state.error?.message || 'Native audio could not open this file.')); };
+          const timer = setTimeout(() => finish(new PlaybackFault('timeout', 'Native audio could not load the file.')), this.loadTimeoutMs);
+          this.on('event', onEvent); this.once('closing', onClosing); this.on('intent-changed', onIntent);
+EDIT	108	108	1
+        current();
+EDIT	110	111	2
+        current();
+        if (output !== 'wasapi') throw new PlaybackFault('device-unavailable', 'WASAPI output did not start. Check the selected device; no shared-mode fallback was applied.');
+EDIT	118	119	1
+        if (error.kind !== 'cancelled') this.update({ ready: false, paused: true, error: faultInfo(error) }); throw error;
+EDIT	145	146	1
+  command(command, value, context) {
+EDIT	148	148	3
+    let token; const guard = this.guard;
+    try { if (context) { token = guard.accept(context); this.emit('intent-changed'); } } catch (error) { return Promise.reject(error); }
+    const current = () => { if (token) { if (guard !== this.guard) throw cancelled(); guard.check(token, command); } };
+EDIT	149	153	5
+      current();
+      if (['pause', 'stop'].includes(command) && !this.socket) return;
+      await this.start(); current();
+      if (command === 'stop') { this.update({ ready: false, paused: true }); await this.request(['stop']); this.update({ id: '', time: 0, duration: 0, ready: false, paused: true, ended: false }); return; }
+      if (command === 'seek') { await this.request(['seek', value, 'absolute+exact']); current(); this.update({ time: value, ended: false }); return; }
+EDIT	156	156	2
+  resetCommands() { this.guard = new NativeCommandGuard(); this.emit('intent-changed'); }
+
+EDIT	160	161	1
+    for (const pending of this.requests.values()) pending.reject(new PlaybackFault('cancelled', 'Native audio is closed.'));
+END
+FILE	electron/native-command-guard.mjs	e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855	1ef070ed669ecea3bf34b7b9ae2d2a5033af5f0f6cc63684a761dad5f1f8fe3f
+EDIT	0	0	27
+import { PlaybackFault } from './playback-errors.mjs';
+export const cancelled = () => new PlaybackFault('cancelled', 'A newer playback command superseded this request.');
+/** Observe intent BEFORE queueing work; a pause can cancel play behind a slow load. */
+export class NativeCommandGuard {
+  current;
+  accept(value) {
+    if (!value || typeof value.id !== 'string' || !/^[a-zA-Z0-9-]{1,100}$/.test(value.id)
+      || !['generation', 'intent', 'seek'].every(key => Number.isSafeInteger(value[key]) && value[key] >= 0)
+      || typeof value.playing !== 'boolean') throw new Error('Invalid native command context.');
+    const next = { ...value }, current = this.current;
+    if (!current || next.generation > current.generation) this.current = { ...next };
+    else if (next.generation < current.generation || next.id !== current.id) throw cancelled();
+    else {
+      if (next.intent > current.intent) { current.intent = next.intent; current.playing = next.playing; }
+      else if (next.intent === current.intent && next.playing !== current.playing) throw cancelled();
+      current.seek = Math.max(current.seek, next.seek);
+    }
+    return next;
+  }
+  valid(token, command = 'load') {
+    const current = this.current;
+    return !!current && token.generation === current.generation && token.id === current.id
+      && (!['play', 'pause'].includes(command) || token.intent === current.intent && current.playing === (command === 'play'))
+      && (command !== 'seek' || token.seek === current.seek);
+  }
+  check(token, command) { if (!this.valid(token, command)) throw cancelled(); }
+}
+END
+FILE	electron/playback-errors.mjs	e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855	ffedb35c84df5d983725ec44da59a1583b5596129ab1d0fe1cec63b86d575bce
+EDIT	0	0	24
+export const faultKinds = new Set(['device-unavailable', 'device-exclusive-busy', 'backend-stopped', 'file-unavailable', 'decode', 'timeout', 'cancelled']);
+export class PlaybackFault extends Error {
+  constructor(kind, message) { super(message); this.name = kind === 'cancelled' ? 'AbortError' : 'PlaybackFault'; this.kind = kind; }
+}
+export function faultInfo(error, fallback = 'backend-stopped') {
+  return { kind: faultKinds.has(error?.kind) ? error.kind : fallback,
+    message: String(error?.message || error || 'Native audio failed.').slice(0, 2000) };
+}
+export async function audioResult(action) {
+  try { await action(); return { ok: true }; }
+  catch (error) { return { ok: false, error: faultInfo(error) }; }
+}
+/** Interpret documented mpv error strings only at the helper boundary.
+ * Unknown failures are never evidence that every file in the queue is broken.
+ */
+export function mpvFault(message, exclusive = false) {
+  const text = String(message || 'unknown error');
+  if (['unrecognized file format', 'audio/video decoding failed', 'decoding failed'].includes(text))
+    return new PlaybackFault('decode', `Audio decoding failed: ${text}.`);
+  if (text === 'loading failed') return new PlaybackFault('file-unavailable', 'The saved audio copy could not be read.');
+  if (text === 'audio output initialization failed') return new PlaybackFault('device-unavailable',
+    exclusive ? 'The exclusive audio output could not open. Check the device or other applications; shared mode was not selected automatically.' : 'The audio output could not open. Check the selected device.');
+  return new PlaybackFault('backend-stopped', `Native audio stopped: ${text}. Check the output and retry this song.`);
+}
+END
+FILE	electron/preload.cjs	e4ab5f7136ec85688eb3d68f4837c4e43db79431e20c4846953d210538dc7f29	9e049c50e973a5e208a50883b4c2dd9cd28886d5224323de18f5c547dc1c0a0e
+EDIT	7	8	1
+  nativeAudioCommand: (command, value, context) => ipcRenderer.invoke('native-audio:command', command, value, context),
+END
+FILE	scripts/test-issue-regressions.mjs	f53af3486b8115dc0738be11f13a9a6de78c47137acd0af42d932b3c041c77ee	c2945787c767fd5c89a7b4db2faf4eae9cb15fbda6adb48b4d787f0ad8045ad7
+EDIT	70	71	15
+  const cells = await boxes(); assert.equal(cells.length, 3); assert.deepEqual(cells.map(cell => cell.row), ['1 / span 1', '2 / span 1', '3 / span 1']);
+  await call(geometry, 'renderGeometry', ['main', false, true, true]); await geometry.waitForTimeout(100);
+  assert.deepEqual((await boxes()).map(cell => cell.column), ['1', '2', '2', '2', '1']);
+  for (const mode of ['main', 'sidebar', 'fullscreen']) {
+    await call(geometry, 'renderGeometry', [mode, true]); await geometry.waitForTimeout(150);
+    const vertical = await geometry.evaluate(() => {
+      const rects = selector => [...document.querySelectorAll(selector)].map(element => { const r = element.getBoundingClientRect(); return { top: r.top, bottom: r.bottom }; });
+      return { lyrics: rects('.lyric-vocal-group'), studio: rects('[data-preview-line]') };
+    });
+    for (const [surface, rows] of Object.entries(vertical)) {
+      assert.equal(rows.length, 3);
+      for (let i = 1; i < rows.length; i++) assert.ok(rows[i].top >= rows[i - 1].bottom - 1, `${mode}/${surface}: simultaneous lyrics overlap vertically`);
+    }
+    await geometry.screenshot({ path: `${output}/${mode}.png`, fullPage: true });
+  }
+EDIT	73	74	1
+  checks.push('Shared LyricsView and Studio preview: stable lanes at three surface sizes, backwards seeks, distinct chronological rows, persistent performer columns including later solos/reversed duets, alignment off.');
+END

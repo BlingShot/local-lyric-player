@@ -1,0 +1,267 @@
+FILE	scripts/test-round2-regressions.mjs	e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855	039a3425851e44ee86c6d0537c77b5080a2e06bbe864da0506e6a403259e805d
+EDIT	0	0	83
+import assert from 'node:assert/strict';
+import { createServer } from 'vite';
+import { chromium } from 'playwright';
+import { mkdir, writeFile } from 'node:fs/promises';
+const origin = 'http://127.0.0.1:4190', output = 'test-results/issues-1-6';
+await mkdir(output, { recursive: true });
+const server = await createServer({ server: { host: '127.0.0.1', port: 4190, strictPort: true }, plugins: [{
+  name: 'round2-regression-page', configureServer(server) {
+    server.middlewares.use('/__round2', async (_request, response) => {
+      response.setHeader('Content-Type', 'text/html');
+      response.end(await server.transformIndexHtml('/__round2', '<!doctype html><html><body><div id="root"></div></body></html>'));
+    });
+  },
+}] });
+const call = (page, name, args = []) => page.evaluate(async ({ name, args }) => {
+  const module = await import('/tests/issue-round2-browser.ts'); return module[name](...args);
+}, { name, args });
+let browser; const checks = [];
+try {
+  await server.listen(); browser = await chromium.launch({ headless: true });
+  const context = await browser.newContext();
+  const a = await context.newPage(), b = await context.newPage();
+  await Promise.all([a.goto(origin + '/__round2'), b.goto(origin + '/__round2')]);
+  // Seed a true version-4 database BEFORE the new repository module is imported.
+  await a.evaluate(async () => {
+    const oldId = JSON.stringify(['same.wav', 4, 123]);
+    const db = await new Promise((resolve, reject) => {
+      const request = indexedDB.open('local-music-library', 4);
+      request.onupgradeneeded = () => {
+        for (const name of ['tracks', 'audio', 'covers', 'settings', 'playlists', 'lyrics', 'analysis', 'analysis-edits', 'analysis-tasks']) request.result.createObjectStore(name);
+      };
+      request.onsuccess = () => resolve(request.result); request.onerror = () => reject(request.error);
+    });
+    await new Promise((resolve, reject) => {
+      const tx = db.transaction([...db.objectStoreNames], 'readwrite');
+      tx.oncomplete = resolve; tx.onabort = () => reject(tx.error);
+      tx.objectStore('tracks').put({ id: oldId, name: 'Renamed title', size: 4, lastModified: 123, lastPlayedAt: 456 }, oldId);
+      tx.objectStore('audio').put(new Blob(['AAAA']), oldId); tx.objectStore('covers').put(new Blob(['cover']), oldId);
+      tx.objectStore('lyrics').put({ trackId: oldId, source: '[00:01]Legacy', fileName: 'legacy.lrc', savedAt: 1 }, oldId);
+      tx.objectStore('playlists').put({ id: 'p', name: 'Old playlist', trackIds: [oldId] }, 'p');
+      for (const store of ['analysis', 'analysis-tasks']) tx.objectStore(store).put({ trackId: oldId, retained: true }, [oldId, 'a']);
+      tx.objectStore('analysis-edits').put({ trackId: oldId, retained: true }, oldId);
+      tx.objectStore('settings').put({ trackId: oldId, retained: true }, 'lyric-studio:' + oldId);
+    }); db.close();
+  });
+  checks.push({ F06: await call(a, 'collisionImportAndMigration') });
+  // A retains an early snapshot; B writes actual IndexedDB commits in another page.
+  let before = await call(a, 'seedTrack', ['versioned']);
+  await call(b, 'saveLyricOffset', ['versioned', 1250, before.lyrics.savedAt]);
+  await assert.rejects(call(a, 'writeCopy', [before]), /timing offset changed/);
+  let current = await call(b, 'snapshot', ['versioned']);
+  assert.equal(current.audio, 'original'); assert.equal(current.lyrics.offsetMs, 1250); assert.notEqual(current.token, before.token);
+  before = current; await call(b, 'replaceLyrics', ['versioned']);
+  await assert.rejects(call(a, 'writeCopy', [before]), /timing offset changed/);
+  current = await call(a, 'snapshot', ['versioned']); assert.equal(current.lyrics.fileName, 'new.lrc'); assert.equal(current.audio, 'original');
+  before = current; await call(a, 'writeCopy', [before]);
+  current = await call(b, 'snapshot', ['versioned']); assert.equal(current.audio, 'modified-copy'); assert.notEqual(current.token, before.token);
+  await assert.rejects(call(b, 'writeCopy', [before]), /audio changed/);
+  before = current; await call(b, 'deleteTrack', ['versioned']);
+  await assert.rejects(call(a, 'writeCopy', [before]), /removed/);
+  current = await call(a, 'snapshot', ['versioned']); assert.equal(current.track, undefined); assert.equal(current.audio, undefined); assert.equal(current.token, null);
+  checks.push('F02: real two-page IndexedDB offset/source/audio revision/deletion conflicts are atomic; valid copy commits succeed.');
+  // Abort real IndexedDB transactions after put; neither project may replace the other's recovery.
+  await assert.rejects(call(a, 'draftSave', ['draft-A', true]));
+  await assert.rejects(call(a, 'draftSave', ['draft-B', true]));
+  await a.reload();
+  assert.deepEqual((await call(a, 'recoveries')).map(x => x.trackId).sort(), ['draft-A', 'draft-B']);
+  for (const id of ['draft-A', 'draft-B']) assert.equal((await call(a, 'readStudioDraft', [id])).lines[0].text, 'Unsaved ' + id);
+  await call(a, 'saveRestored', ['draft-B']); assert.deepEqual((await call(a, 'recoveries')).map(x => x.trackId), ['draft-A']);
+  await assert.rejects(call(a, 'draftSave', ['draft-C', true, true]), /Draft and recovery copy could not be saved/);
+  assert.deepEqual((await call(a, 'recoveries')).map(x => x.trackId), ['draft-A']);
+  await call(a, 'saveRestored', ['draft-A']); assert.deepEqual(await call(a, 'recoveries'), []);
+  await call(a, 'seedLegacyDraft'); await call(a, 'saveRestored', ['legacy-draft']);
+  assert.equal(await a.evaluate(() => localStorage.getItem('lyric-studio-recovery')), null);
+  checks.push('F03: real transaction abort, two-project recovery across reload, isolated cleanup, quota failure and legacy recovery migration passed.');
+  for (const name of ['nativeIntentRegressions', 'bridgeDeviceFaults']) {
+    const page = await context.newPage(); await page.goto(origin + '/__round2');
+    checks.push({ [name]: await call(page, name) }); await page.close();
+  }
+  await writeFile(`${output}/checks.json`, JSON.stringify(checks, null, 2));
+  console.log(JSON.stringify({ success: true, checks }, null, 2));
+} catch (error) { await writeFile(`${output}/failure.txt`, error.stack || String(error)); throw error; }
+finally { await browser?.close(); await server.close(); }
+END
+FILE	src/components/Lyrics/LyricTools.tsx	db2a726f20b28992288cd6afcc24a7806f56f9f9b27af1adc495d95cce95e567	0b34b38dfe72e91d3f36e6450421c2cd404c60db84faf35593a5781b361a7a33
+EDIT	0	0	1
+import { lyricRevision } from '../../lyrics/revision';
+EDIT	32	33	1
+      await writeLocalLyricsCopy(track.id, source, lyricRevision(snapshot.current));
+END
+FILE	src/components/Lyrics/LyricsView.tsx	990eb794ac391da8b598a29bc5ea9562244f2ac6645829ec62324afa4983bbda	5a5a943f913aac1b1c1c4143b04664cff49459b325266e5927d16497cac443e6
+EDIT	85	86	1
+          const duet = appearance.performerAlignment && scene.groups.some(group => layout.get(group[0].id)?.split);
+END
+FILE	src/components/Studio/StudioLivePreview.tsx	0d4b14cf405914da1660ce8051439eab0a60274422e0f7d8deca575bda8a290c	00f34a61f420b366176e4b5793a4f647be2ef857e28aa132f4aa565ac12752cb
+EDIT	92	93	1
+      const duet = appearance.performerAlignment && scene.groups.some(group => layout.get(group[0].id)?.split);
+END
+FILE	src/components/Studio/StudioWorkspace.tsx	4c5a942e6011eaa83c04e029a675db708709e02d19f6ed4c3458ca65f9184669	7b7f59fadd2f01b64f6e89857a47adb591bff7bb73b76a62d9d80ce3f1a7cd2f
+EDIT	15	17	2
+import { AUDIO_ACCEPT, isAudioFileName, trackCover } from '../../library/importFiles';
+import { getLocalAudioElement, getLocalPlayer, importStudioAudio, playLocalTrack, restoreAudioFile, writeLocalLyricsCopy } from '../../player/runtime';
+EDIT	91	92	7
+    try {
+      const restoring = track?.unavailable && file.name === (track.fileName || track.name) && file.size === (track.originalSize ?? track.size);
+      const id = restoring ? await restoreAudioFile(track!.id, file) ? track!.id : undefined : await importStudioAudio(file);
+      if (id) { getLocalPlayer().pause(); changeTrack(id, trackId === 'untitled' ? edit.current.current : undefined); }
+      else setMessage('Audio could not be saved.');
+    } finally { setBusy(false); }
+
+END
+FILE	src/desktop/types.d.ts	5837b7448691a0cdfb579a5319d2c26e9994f9193dbd2ab79e6d467ec6948830	a40e221513c0e23ad8977e5b743cf87f8e2c5333536c99cd5d54a81a08cc9378
+EDIT	0	0	1
+import type { NativeCommandContext, NativeAudioResult, PlaybackErrorInfo } from '../player/playbackErrors';
+EDIT	19	22	3
+      nativeAudioLoad(value: { id: string; bytes: ArrayBuffer; device: string; exclusive: boolean; position: number; volume: number; speed: number; context: NativeCommandContext }): Promise<NativeAudioResult>;
+      nativeAudioCommand(command: 'play' | 'pause' | 'seek' | 'volume' | 'speed' | 'stop', value: number | undefined, context: NativeCommandContext): Promise<NativeAudioResult>;
+      onNativeAudioState(callback: (state: { id: string; time: number; duration: number; paused: boolean; ended: boolean; ready: boolean; error?: PlaybackErrorInfo; exclusive?: boolean }) => void): () => void;
+EDIT	35	36	1
+      nextFolderBatch(id: string): Promise<{ done: boolean; files: { name: string; size: number; lastModified: number; relativePath: string; url: string }[] }>;
+END
+FILE	src/i18n/zh08.ts	6b5b43a5349f062cf9f4cd6f023eb7d12c405151c5766cda488153484012978a	9d25a21b06a11ae362ad079f1a9238b162619d3954a6a0a91723f14a9b72d13b
+EDIT	1	1	2
+  'Unsaved recovery drafts': '未提交的恢复草稿', 'Restore draft': '恢复草稿', 'Discard recovery': '丢弃恢复副本',
+  'Discard this recovery copy? Export any needed work first.': '丢弃此恢复副本？请先导出仍需保留的内容。',
+END
+FILE	src/library/database.ts	57b1957f4fa1e92117cce4748009624c22650776321810e8e7f5b1474999b82f	5b4b41d719d7391de7cd0b028832f53d480de18171f2b88be225e10370ee3916
+EDIT	0	1	2
+import { lyricRevision, revisedLyrics } from '../lyrics/revision.ts';
+import { trackFingerprint, type LocalTrack } from './importFiles.ts';
+EDIT	28	29	1
+    const request = indexedDB.open(DATABASE_NAME, 5);
+EDIT	34	34	8
+      // Add a candidate fingerprint without changing any legacy primary/foreign key.
+      const cursorRequest = request.transaction!.objectStore('tracks').openCursor();
+      cursorRequest.onsuccess = () => {
+        const cursor = cursorRequest.result; if (!cursor) return;
+        const track = cursor.value as TrackRecord;
+        if (!track.dedupeFingerprint) cursor.update({ ...track, dedupeFingerprint: trackFingerprint(track) });
+        cursor.continue();
+      };
+EDIT	97	98	1
+          try { if (request.result === undefined) tx.objectStore('lyrics').put(revisedLyrics(item.lyrics!), item.track.id); }
+EDIT	163	164	1
+              try { if (lyric.result === undefined) tx.objectStore('lyrics').put(revisedLyrics(item.lyrics!), item.id); }
+EDIT	195	196	1
+export async function saveAudioLyricsCopy(expected: LocalTrack, audio: Blob, lyrics: SavedLyrics, expectedLyrics: string | null): Promise<TrackRecord> {
+EDIT	209	215	16
+        if (lyrics.trackId !== latest.id) throw new Error('Mismatched lyric identity.');
+        const current = tx.objectStore('lyrics').get(latest.id);
+        current.onsuccess = () => {
+          try {
+            if (lyricRevision(current.result) !== expectedLyrics)
+              throw new Error('Lyrics or timing offset changed while writing. The newer version was kept; retry with the current lyrics.');
+            updated = { ...latest, size: audio.size, originalSize: latest.originalSize ?? latest.size,
+              audioRevision: latest.audioRevision ?? JSON.stringify([latest.id, latest.size, latest.lastModified, latest.addedAt]),
+              lyricsWrittenAt: crypto.randomUUID(), embeddedLyricsChecked: true, lyricsWarning: undefined };
+            tx.objectStore('audio').put(audio, latest.id);
+            tx.objectStore('tracks').put(updated, latest.id);
+            // The write-copy operation never edits the timing offset.
+            tx.objectStore('lyrics').put(revisedLyrics({ ...lyrics, offsetMs: current.result?.offsetMs }), latest.id);
+          } catch (error) { failure = error; tx.abort(); }
+        };
+
+END
+FILE	src/library/folderImport.ts	4866d106f509d71c193d15bb8adaf592261fd6215cf4f10b936045daeb46241e	1bcf08aeea887c8640c6f3585fe6583e8d43dd28afdf70a41c213ff2e7807ce7
+EDIT	1	2	1
+import { fileFingerprint, isAudioFileName } from './importFiles';
+EDIT	80	81	1
+          const id = `v2:${JSON.stringify([entry.relativePath, fileFingerprint(entry)])}`;
+EDIT	82	83	1
+          {
+EDIT	93	93	1
+            const before = new Set(store.getState().library.tracks.map(track => track.id));
+EDIT	94	95	1
+            added += store.getState().library.tracks.filter(track => !before.has(track.id)).length;
+EDIT	108	109	1
+async function* filesIn(directory: ReadableDirectory, run: number, path = ''): AsyncGenerator<{ file: File; path: string }> {
+EDIT	117	118	1
+        yield { file, path: entryPath };
+EDIT	145	146	1
+          added += store.getState().library.tracks.filter(track => !before.has(track.id)).length;
+EDIT	155	156	1
+      for await (const { file, path } of filesIn(current.handle, run)) {
+EDIT	157	158	1
+        const id = `v2:${JSON.stringify([path, fileFingerprint(file)])}`;
+EDIT	160	161	1
+        pending.push(file);
+EDIT	232	232	6
+function savedHistoryNeedsReview(ids: string[]) {
+  if (!ids.some(id => !id.startsWith('v2:'))) return false;
+  publish({ status: 'ready', message: 'Folder identity tracking was upgraded. Scan manually to recheck file contents; previously removed files may be imported again. Existing library data is unchanged.' });
+  return true;
+}
+
+EDIT	241	241	1
+      if (savedHistoryNeedsReview(desktopFolder.seenIds)) return;
+EDIT	254	254	1
+    if (savedHistoryNeedsReview(folder.seenIds)) return;
+END
+FILE	src/library/importFiles.ts	d78947cf2992c943aebecdce383f024fb129e1ef2f510cabf6e156aaca36762e	4c8c558f4e8b07e111cea6f0c112e3789094295a631f2d35e34a9b2fe1c732f2
+EDIT	4	4	1
+  dedupeFingerprint?: string;
+EDIT	39	40	2
+/** A cheap candidate key, never a track ID or proof of byte equality. */
+export const fileFingerprint = (file: Pick<File, 'name' | 'size' | 'lastModified'>) =>
+EDIT	41	50	35
+// Retained only for legacy callers/import history; new records use UUIDs.
+export const fileId = fileFingerprint;
+export function trackFingerprint(track: LocalTrack): string {
+  if (track.dedupeFingerprint) return track.dedupeFingerprint;
+  try {
+    const legacy = JSON.parse(track.id);
+    if (Array.isArray(legacy) && legacy.length === 3 && typeof legacy[0] === 'string'
+      && typeof legacy[1] === 'number' && typeof legacy[2] === 'number') return JSON.stringify(legacy);
+  } catch { /* A UUID is not a legacy metadata key. */ }
+  return fileFingerprint({ name: track.fileName || track.name, size: track.originalSize ?? track.size, lastModified: track.lastModified });
+}
+/** Compare only metadata-collision candidates; at most 2 MiB are read at once.
+ * This avoids full-file copies/hashing for every ordinary import and yields to UI.
+ */
+export async function sameFileBytes(a: Blob, b: Blob): Promise<boolean> {
+  if (a.size !== b.size) return false;
+  const chunk = 1024 * 1024;
+  for (let start = 0; start < a.size; start += chunk) {
+    const [left, right] = await Promise.all([a.slice(start, start + chunk).arrayBuffer(), b.slice(start, start + chunk).arrayBuffer()]);
+    const x = new Uint8Array(left), y = new Uint8Array(right);
+    if (x.length !== y.length) return false;
+    for (let i = 0; i < x.length; i++) if (x[i] !== y[i]) return false;
+    await new Promise<void>(resolve => setTimeout(resolve, 0));
+  }
+  return true;
+}
+export async function collectFiles(files: readonly File[], existing: readonly LocalTrack[],
+  readAudio: (track: LocalTrack) => Blob | undefined | Promise<Blob | undefined> = () => undefined) {
+  const candidates = new Map<string, LocalTrack[]>();
+  for (const track of existing) {
+    const key = trackFingerprint(track), list = candidates.get(key) || [];
+    list.push(track); candidates.set(key, list);
+  }
+  const tracks: LocalTrack[] = [], originals = new Map<string, File>(), resolvedIds: (string | undefined)[] = [];
+  let rejected = 0, duplicates = 0;
+EDIT	51	54	7
+    if (!AUDIO_EXTENSION.test(file.name) || file.size === 0) { rejected++; resolvedIds.push(undefined); continue; }
+    const fingerprint = fileFingerprint(file), possible = candidates.get(fingerprint) || [];
+    let duplicate: LocalTrack | undefined;
+    for (const candidate of possible) {
+      const bytes = originals.get(candidate.id) || await readAudio(candidate);
+      // Missing/rewritten audio cannot prove equivalence. Never silently skip it.
+      if (bytes && await sameFileBytes(file, bytes)) { duplicate = candidate; break; }
+EDIT	55	63	5
+    if (duplicate) { duplicates++; resolvedIds.push(duplicate.id); continue; }
+    const track = { id: crypto.randomUUID(), dedupeFingerprint: fingerprint, name: file.name,
+      fileName: file.name, size: file.size, lastModified: file.lastModified };
+    tracks.push(track); originals.set(track.id, file); resolvedIds.push(track.id);
+    possible.push(track); candidates.set(fingerprint, possible);
+EDIT	64	65	1
+  return { tracks, originals, resolvedIds, rejected, duplicates };
+END
+FILE	src/lyrics/amll.ts	696ab2d794bce7b57e911792511d7ef55e8557478b012eacc1a78082ea5a14da	42ffc6405012e1888356b5cd89967c6515f0e77a34511153c94959d1be1d993f
+EDIT	0	0	1
+import { lyricRevision } from './revision';
+EDIT	70	71	1
+    remote: { isrc: match?.isrc || '', spotifyId: match?.id || '', authors: Array.isArray(data.authorUsernames) ? data.authorUsernames.filter(name => typeof name === 'string').slice(0, 50) : [] } }, lyricRevision(before));
+END
