@@ -12,9 +12,13 @@ const server = await createServer({ server: { host: '127.0.0.1', port: 4190, str
     });
   },
 }] });
-const call = (page, name, args = []) => page.evaluate(async ({ name, args }) => {
+const call = async (page, name, args = []) => {
+  let timer;
+  try { return await Promise.race([page.evaluate(async ({ name, args }) => {
   const module = await import('/tests/issue-round2-browser.ts'); return module[name](...args);
-}, { name, args });
+}, { name, args }), new Promise((_, reject) => { timer = setTimeout(() => reject(new Error(`Browser regression timed out: ${name}`)), 30000); })]); }
+  finally { clearTimeout(timer); }
+};
 let browser; const checks = [];
 try {
   await server.listen(); browser = await chromium.launch({ headless: true });
