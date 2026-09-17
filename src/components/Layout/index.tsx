@@ -8,7 +8,6 @@ import { useLocation } from 'react-router-dom';
 import { Navbar } from './components/Navbar';
 import { Library } from './components/Library';
 import PlayingBar from './components/PlayingBar';
-import { GlobalDebugOverlay } from '../Debug/DebugOverlays';
 import { FileDetails } from '../LocalTracks/FileDetails';
 import { useAppDispatch, useAppSelector } from '../../store/store';
 import { uiActions } from '../../store/slices/offlineUi';
@@ -105,7 +104,6 @@ export function AppLayout({ children }: { children: ReactNode }) {
         </div>
       </div>
       <PlayingBar />
-      <GlobalDebugOverlay />
 
       <Drawer title={t("Your library")} open={mobile && ui.libraryDrawerOpen && !ui.lyricsFullscreen} placement='left' width={300}
         onClose={() => dispatch(uiActions.closeLibraryDrawer())}><Library drawer /></Drawer>
