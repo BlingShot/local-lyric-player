@@ -1,3 +1,11 @@
+## 0.8.3 — Diagnostics and cache management
+
+- Added Advanced → Debug Mode and six live diagnostic views, bounded structured logs, redacted JSON reports, copy/export/open-folder/clear actions.
+- Added lyric/word/performer/overlap/interlude snapshots and correlated AMLL and audio decoding stage/error traces. Disabling diagnostics stops periodic collection.
+- Bounded AMLL index/negative-result retention; cache clearing preserves music, lyrics, settings and Studio drafts. Route HTTP cache to the configured cache directory and trim oversized generated caches at startup.
+- Externalized analysis WASM as a local binary asset; excluded source maps, logs and the unused mpv console launcher from desktop packaging. Kept codecs, licenses, UI design and playback architecture.
+- Added privacy, rotation, queue recovery, lyric diagnostics, disabled-mode, request-chain and report-export regressions.
+
 # CHANGELOG of Lyric Player
 ## v0.1.0 14/09/2026
 **ADD**

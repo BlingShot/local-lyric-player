@@ -1,0 +1,52 @@
+import assert from 'node:assert/strict';
+import { createServer } from 'vite';
+import { chromium } from 'playwright';
+import { mkdir, writeFile, readFile } from 'node:fs/promises';
+const output = 'test-results/debug-diagnostics', origin = 'http://127.0.0.1:4192';
+await mkdir(output, { recursive: true });
+const server = await createServer({ server: { host: '127.0.0.1', port: 4192, strictPort: true }, plugins: [{ name: 'debug-fixture', configureServer(server) {
+  server.middlewares.use('/__debug', async (_req, res) => { res.setHeader('Content-Type', 'text/html'); res.end(await server.transformIndexHtml('/__debug', '<!doctype html><html><body><div id="root"></div></body></html>')); });
+} }] });
+const call = (page, name, args = []) => page.evaluate(async ({ name, args }) => (await import('/tests/debug-browser.ts'))[name](...args), { name, args });
+let browser; const results = [], errors = [];
+try {
+  await server.listen(); browser = await chromium.launch({ headless: true, executablePath: process.env.PLAYWRIGHT_CHROMIUM_EXECUTABLE || undefined });
+  const context = await browser.newContext({ viewport: { width: 1500, height: 1000 }, permissions: ['clipboard-read', 'clipboard-write'] });
+  const page = await context.newPage(); page.on('pageerror', error => errors.push(error.message));
+  await page.goto(origin + '/__debug'); await call(page, 'boot');
+  await page.getByRole('button', { name: 'Advanced', exact: true }).click();
+  assert.equal(await page.getByRole('checkbox', { name: 'Debug mode', exact: true }).isChecked(), false);
+  const before = await call(page, 'stats'); await call(page, 'offNoise'); await page.waitForTimeout(1100); const normal = await call(page, 'stats');
+  assert.equal(normal.samples, 0); assert.equal(normal.desktopPolls, 0); assert.ok(normal.retained - before.retained < 5);
+  results.push({ normalMode: 'no sampler, no IPC polling, DEBUG noise dropped', normal });
+  await page.getByRole('checkbox', { name: 'Debug mode', exact: true }).check();
+  await page.waitForTimeout(1200); assert.ok((await call(page, 'stats')).samples >= 2);
+  await page.getByRole('button', { name: 'Debug Panel', exact: true }).click();
+  const panel = page.locator('.debug-modal');
+  for (const tab of ['Live Debug', 'Lyrics', 'Audio', 'TTML/API', 'Performance', 'Errors']) { await panel.getByRole('button', { name: tab, exact: true }).click(); assert.ok((await panel.locator('pre').innerText()).length); }
+  await panel.getByRole('button', { name: 'Lyrics', exact: true }).click(); await page.waitForTimeout(550);
+  const lyrics = JSON.parse(await panel.locator('pre').innerText()); assert.equal(lyrics.current.source, 'AMLL TTML'); assert.ok(lyrics.current.current.wordTimestamps.length > 0);
+  await page.screenshot({ path: `${output}/lyrics-panel.png` });
+  await call(page, 'sensitiveError'); await page.waitForTimeout(550);
+  const report = await call(page, 'report'); const parsed = JSON.parse(report);
+  for (const key of ['environment', 'currentSong', 'audio', 'lyrics', 'amllTtml', 'performance', 'recentErrors', 'recentLogs', 'recentDesktopLogs']) assert.ok(key in parsed, key);
+  for (const secret of ['PrivateUser', 'test-secret-key', 'test-bearer-secret']) assert.ok(!report.includes(secret), secret);
+  assert.ok(report.includes('sample.flac')); assert.ok(report.includes('stack')); assert.ok(Buffer.byteLength(report) < 1024 * 1024);
+  await panel.getByRole('button', { name: 'Copy Debug Info', exact: true }).click();
+  assert.ok((await page.evaluate(() => navigator.clipboard.readText())).includes('reportVersion'));
+  const download = page.waitForEvent('download'); await panel.getByRole('button', { name: 'Export Debug Report', exact: true }).click();
+  const file = await download; await file.saveAs(`${output}/debug-report.json`); JSON.parse(await readFile(`${output}/debug-report.json`, 'utf8'));
+  await panel.getByRole('button', { name: 'Open Log Folder', exact: true }).click(); assert.equal((await call(page, 'stats')).opened, 1);
+  results.push({ report: 'copy/export/IPC folder action and secret/path redaction passed' });
+  results.push(await call(page, 'amllFlow')); results.push(await call(page, 'parserFailure')); results.push(await call(page, 'decoderFailure'));
+  await page.waitForTimeout(550); await panel.getByRole('button', { name: 'Errors', exact: true }).click();
+  assert.ok((await panel.locator('pre').innerText()).includes('Decoder fixture failed.')); await page.screenshot({ path: `${output}/errors-panel.png` });
+  await panel.getByRole('button', { name: 'Clear Logs', exact: true }).click(); assert.equal((await call(page, 'stats')).cleared, 1);
+  // Disable with the panel open: the panel closes and every periodic collector stops.
+  await panel.locator('.ant-modal-close').click(); await page.getByRole('checkbox', { name: 'Debug mode', exact: true }).uncheck();
+  const stopped = await call(page, 'stats'); await page.waitForTimeout(1400); const later = await call(page, 'stats');
+  assert.equal(later.samples, stopped.samples); assert.equal(later.desktopPolls, stopped.desktopPolls); assert.equal(later.debug, false);
+  assert.deepEqual(errors, []); results.push({ disabled: 'sampler and main-process polling stopped', samples: later.samples });
+  await writeFile(`${output}/report.json`, JSON.stringify({ passed: true, results, errors }, null, 2)); console.log(JSON.stringify(results, null, 2));
+} catch (error) { await writeFile(`${output}/failure.json`, JSON.stringify({ error: String(error), stack: error.stack, results, errors }, null, 2)); throw error; }
+finally { await browser?.close(); await server.close(); }

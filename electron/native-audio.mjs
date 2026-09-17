@@ -10,11 +10,12 @@ const finite = (value, min, max) => typeof value === 'number' && Number.isFinite
 
 // Only local bytes and a small command whitelist cross the renderer boundary.
 export class NativeAudio extends EventEmitter {
-  constructor(binary, directory, { loadTimeoutMs = 15000 } = {}) {
-    super(); this.loadTimeoutMs = loadTimeoutMs; this.binary = binary; this.directory = directory; this.requests = new Map(); this.temp = new AudioTempFiles(directory); this.files = this.temp.files; this.serial = Promise.resolve(); this.sequence = 0;
+  constructor(binary, directory, { loadTimeoutMs = 15000, diagnostic = () => {} } = {}) {
+    super(); this.diagnostic = diagnostic; this.loadTimeoutMs = loadTimeoutMs; this.binary = binary; this.directory = directory; this.requests = new Map(); this.temp = new AudioTempFiles(directory); this.files = this.temp.files; this.serial = Promise.resolve(); this.sequence = 0;
     this.state = { id: '', time: 0, duration: 0, paused: true, ended: false, ready: false, exclusive: false }; this.closed = false; this.meterEnabled = false; this.guard = new NativeCommandGuard();
   }
-  update(patch) { this.state = { ...this.state, ...patch }; this.emit('state', { ...this.state }); }
+  debugEvent(level, stage, data = {}) { try { this.diagnostic(level, stage, data); } catch { /* Diagnostics never affect transport. */ } }
+  update(patch) { if (patch.error) this.debugEvent('error', 'StateFault', { id: this.state.id, error: patch.error, stderr: this.stderr }); this.state = { ...this.state, ...patch }; this.emit('state', { ...this.state }); }
   assertOpen() { if (this.closed) throw new PlaybackFault('cancelled', 'Native audio is closed.'); }
   enqueue(fn) { const result = this.serial.then(() => { this.assertOpen(); return fn(); }); this.serial = result.catch(() => {}); return result; }
   async start() {
@@ -24,11 +25,13 @@ export class NativeAudio extends EventEmitter {
     this.starting = (async () => {
       const pipe = `\\\\.\\pipe\\lyric-player-${process.pid}-${randomUUID()}`;
       this.stderr = '';
+      this.debugEvent('debug', 'DecoderInit', { binary: this.binary, backend: 'mpv', output: 'wasapi' });
       const child = spawn(this.binary, ['--no-config', '--load-scripts=no', '--ytdl=no', '--access-references=no', '--autoload-files=no', '--demuxer-lavf-o=protocol_whitelist=[file,pipe,data]', '--no-video', '--idle=yes', '--no-terminal', '--input-media-keys=no', '--input-default-bindings=no', '--ao=wasapi', '--audio-fallback-to-null=no', '--audio-exclusive=no', '--pause=yes', '--keep-open=yes', '--volume-max=1000', '--replaygain=no', `--input-ipc-server=${pipe}`], { windowsHide: true, stdio: ['ignore', 'ignore', 'pipe'] });
       this.child = child; let failure;
       child.stderr.on('data', bytes => { this.stderr = (this.stderr + bytes.toString()).slice(-4000); });
-      child.on('error', error => { failure = error; });
-      child.on('exit', () => {
+      child.on('error', error => { failure = error; this.debugEvent('error', 'DecoderSpawn', { error, binary: this.binary }); });
+      child.on('exit', (code, signal) => {
+        this.debugEvent(this.closed ? 'debug' : 'error', 'DecoderExit', { code, signal, stderr: this.stderr });
         if (this.child !== child) return;
         this.socket?.destroy(); this.socket = undefined; this.child = undefined; this.meterEnabled = false;
         for (const pending of this.requests.values()) pending.reject(new PlaybackFault('backend-stopped', 'Native audio process stopped.')); this.requests.clear();
@@ -41,7 +44,7 @@ export class NativeAudio extends EventEmitter {
       }
       if (!socket) { child.kill(); throw new Error('Native audio IPC did not start.'); }
       if (this.closed) { socket.destroy(); child.kill(); throw new PlaybackFault('cancelled', 'Native audio is closed.'); }
-      this.socket = socket; let buffer = '';
+      this.socket = socket; this.debugEvent('debug', 'IPCConnected'); let buffer = '';
       socket.setEncoding('utf8');
       socket.on('error', error => { if (!this.closed) this.update({ error: faultInfo(error), paused: true, ready: false }); });
       socket.on('data', text => {
@@ -55,7 +58,7 @@ export class NativeAudio extends EventEmitter {
       });
       for (const [index, property] of ['time-pos', 'duration', 'pause', 'eof-reached', 'current-ao'].entries()) await this.request(['observe_property', index + 1, property]);
     })();
-    try { await this.starting; } finally { this.starting = undefined; }
+    try { await this.starting; } catch (error) { this.debugEvent('error', 'DecoderInit', { error, stderr: this.stderr }); throw error; } finally { this.starting = undefined; }
   }
   receive(message) {
     if (message.request_id) {
@@ -91,23 +94,29 @@ export class NativeAudio extends EventEmitter {
     try { if (value.context) { token = guard.accept(value.context); if (token.id !== value.id) throw cancelled(); this.emit('intent-changed'); } }
     catch (error) { return Promise.reject(error); }
     const current = () => { this.assertOpen(); if (token) { if (guard !== this.guard) throw cancelled(); guard.check(token, 'load'); } };
+    let stage = 'Queued'; const started = performance.now();
+    const mark = name => { stage = name; this.debugEvent('debug', name, { id: value.id, generation: value.context?.generation, elapsedMs: Math.round(performance.now() - started) }); };
+    this.debugEvent('debug', 'LoadRequest', { id: value.id, bytes: value.bytes.byteLength, device: value.device, exclusive: value.exclusive, position: value.position });
     return this.enqueue(async () => {
-      current();
+      current(); mark('DeviceDiscovery');
       const devices = await this.devices(); current(); if (!devices.some(d => d.name === value.device)) throw new PlaybackFault('device-unavailable', 'The selected playback device is unavailable.');
-      this.update({ ready: false, paused: true });
+      mark('PreviousRelease'); this.update({ ready: false, paused: true });
       await this.request(['stop']);
       await this.temp.cleanup();
       current();
+      mark('OutputConfiguration');
       await this.request(['set_property', 'pause', true]);
       await this.request(['set_property', 'audio-device', value.device]);
       await this.request(['set_property', 'audio-exclusive', value.exclusive]);
       await this.request(['set_property', 'volume', value.volume]);
       await this.request(['set_property', 'speed', value.speed]);
       current();
-      const file = await this.temp.create(new Uint8Array(value.bytes));
+      mark('FileWrite'); const file = await this.temp.create(new Uint8Array(value.bytes));
+      this.debugEvent('debug', 'FileWritten', { id: value.id, file, bytes: value.bytes.byteLength });
       try { current(); } catch (error) { await this.temp.cleanup(); throw error; }
       this.update({ id: value.id, time: value.position, duration: 0, paused: true, ended: false, ready: false, exclusive: value.exclusive, error: undefined });
       try {
+        mark('Decode');
         await new Promise((resolve, reject) => {
           const finish = error => { clearTimeout(timer); this.off('event', onEvent); this.off('closing', onClosing); this.off('intent-changed', onIntent); error ? reject(error) : resolve(); };
           const onClosing = () => finish(new PlaybackFault('cancelled', 'Native audio is closed.'));
@@ -118,12 +127,14 @@ export class NativeAudio extends EventEmitter {
           void this.request(['loadfile', file, 'replace', -1, { start: String(value.position) }]).catch(finish);
         });
         current();
+        mark('OutputVerification');
         const duration = await this.request(['get_property', 'duration']);
         const output = await this.request(['get_property', 'current-ao']);
         current();
         if (output !== 'wasapi') throw new PlaybackFault('device-unavailable', 'WASAPI output did not start. Check the selected device; no shared-mode fallback was applied.');
         this.update({ duration: Number(duration) || 0, ready: true, paused: true });
-        await this.temp.cleanup(file);
+        mark('CacheCleanup'); await this.temp.cleanup(file);
+        this.debugEvent('info', 'LoadCompleted', { id: value.id, duration, output, elapsedMs: Math.round(performance.now() - started) });
       } catch (error) {
         // Delete only after the helper acknowledges release. If stop fails, retain
         // ownership until the next successful stop or process shutdown.
@@ -131,7 +142,7 @@ export class NativeAudio extends EventEmitter {
         if (released) await this.temp.cleanup();
         if (error.kind !== 'cancelled') this.update({ ready: false, paused: true, error: faultInfo(error) }); throw error;
       }
-    });
+    }).catch(error => { this.debugEvent(error.kind === 'cancelled' ? 'debug' : 'error', 'LoadFailed', { id: value.id, stage, elapsedMs: Math.round(performance.now() - started), error, stderr: this.stderr }); throw error; });
   }
   setMeter(enabled) {
     if (typeof enabled !== 'boolean') return Promise.reject(new Error('Invalid audio meter request.'));

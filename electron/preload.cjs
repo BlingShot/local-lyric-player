@@ -17,6 +17,8 @@ contextBridge.exposeInMainWorld('localMusicDesktop', Object.freeze({
   configPath: () => ipcRenderer.invoke('desktop-config:path'),
   writeLog: entry => ipcRenderer.invoke('desktop-log:write', entry),
   readLog: () => ipcRenderer.invoke('desktop-log:read'),
+  clearLogs: () => ipcRenderer.invoke('desktop-log:clear'),
+  debugInfo: () => ipcRenderer.invoke('desktop-log:info'),
   logPath: () => ipcRenderer.invoke('desktop-log:path'),
   openLogFolder: () => ipcRenderer.invoke('desktop-log:open'),
   openDebugTools: () => ipcRenderer.invoke('desktop-log:devtools'),

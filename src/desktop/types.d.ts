@@ -29,8 +29,10 @@ declare global {
       getConfig<T>(key: string): Promise<T | undefined>;
       setConfig(key: string, value: unknown): Promise<void>;
       configPath(): Promise<string>;
-      writeLog(entry: { level: 'debug' | 'info' | 'warn' | 'error'; scope: string; message: string }): Promise<void>;
+      writeLog(entry: { level: 'debug' | 'info' | 'warn' | 'error'; scope: string; message: string; data?: unknown }): Promise<void>;
       readLog(): Promise<string>;
+      clearLogs(): Promise<void>;
+      debugInfo(): Promise<unknown>;
       logPath(): Promise<string>;
       openLogFolder(): Promise<void>;
       openDebugTools(): Promise<void>;

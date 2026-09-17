@@ -58,6 +58,7 @@ export async function startDesktop({ show = true, userData, singleInstance = tru
   const locations = storage.startup(); // Previous process is closed; copy/verify before Chromium opens IndexedDB.
   app.setPath('userData', locations.dataPath);
   app.setPath('sessionData', locations.dataPath);
+  app.commandLine.appendSwitch('disk-cache-dir', path.join(locations.cachePath, 'HTTP Cache'));
   app.commandLine.appendSwitch('disk-cache-size', String(128 * 1024 * 1024));
   useNativeFfmpeg(app.commandLine);
 

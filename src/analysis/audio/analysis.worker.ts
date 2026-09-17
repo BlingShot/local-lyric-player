@@ -1,10 +1,12 @@
 import Essentia from 'essentia.js/dist/essentia.js-core.es.js';
-import { EssentiaWASM } from 'essentia.js/dist/essentia-wasm.es.js';
+import createEssentia from 'essentia.js/dist/essentia-wasm.web.js';
+import wasmUrl from 'essentia.js/dist/essentia-wasm.web.wasm?url';
 import { AUDIO_ANALYSIS_RATE, BPM_PARAMETERS, KEY_PARAMETERS } from './config';
 import type { AudioWorkerRequest, AudioWorkerResponse, BpmResult, KeyResult } from './types';
 
 interface Vector { size(): number; get(index: number): number; delete(): void }
-self.onmessage = (event: MessageEvent<AudioWorkerRequest>) => {
+let wasm: Promise<unknown> | undefined;
+self.onmessage = async (event: MessageEvent<AudioWorkerRequest>) => {
   const { id, trackId, kind, pcm, range, sourceMetadata } = event.data;
   let engine: Essentia | undefined;
   const vectors = new Set<Vector>();
@@ -14,7 +16,9 @@ self.onmessage = (event: MessageEvent<AudioWorkerRequest>) => {
     if (range.analysisSampleRate !== AUDIO_ANALYSIS_RATE || pcm.length !== range.analysisFrames) throw new Error('Invalid PCM sample rate or frame count.');
     let peak = 0;
     for (const value of pcm) { if (!Number.isFinite(value)) throw new Error('The decoded PCM contains invalid samples.'); peak = Math.max(peak, Math.abs(value)); }
-    engine = new Essentia(EssentiaWASM);
+    // Keep the WASM binary as one local asset instead of a large base64 JS string.
+    // The analysis queue still owns this single-use worker and its cancellation.
+    engine = new Essentia(await (wasm ||= createEssentia({ locateFile: () => wasmUrl })));
     const base = { range, sourceMetadata, engineVersion: engine.version };
     if (peak <= 1e-7 || range.end < 3) {
       respond({ id, trackId, kind, result: { ...base, outcome: 'unreliable', raw: null,

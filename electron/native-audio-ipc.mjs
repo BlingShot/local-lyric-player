@@ -7,7 +7,7 @@ import { cleanupStaleAudioSessions } from './audio-temp-files.mjs';
 const sessions = new Set();
 let quitHookInstalled = false;
 export const disposeNativeAudio = () => Promise.all([...sessions].map(audio => audio.dispose()));
-export function registerNativeAudio(win, _config, handle) {
+export function registerNativeAudio(win, _config, handle, logger) {
   if (!quitHookInstalled) {
     quitHookInstalled = true;
     let complete = false, pending = false;
@@ -24,7 +24,8 @@ export function registerNativeAudio(win, _config, handle) {
     });
   }
   const binary = app.isPackaged ? path.join(process.resourcesPath, 'native', 'mpv.exe') : path.resolve(import.meta.dirname, '../desktop/native/mpv.exe');
-  const audio = new NativeAudio(binary, path.join(app.getPath('temp'), `lyric-player-audio-${randomUUID()}`));
+  const log = (level, stage, data) => { if (level === 'debug' && !logger?.debug) return; void logger?.write({ level, scope: 'audio.native', message: stage, data }).catch(() => {}); };
+  const audio = new NativeAudio(binary, path.join(app.getPath('temp'), `lyric-player-audio-${randomUUID()}`), { diagnostic: log });
   sessions.add(audio);
   const sweep = cleanupStaleAudioSessions(app.getPath('temp')).catch(error => console.warn('Audio session sweep failed:', error.message));
   audio.on('state', state => { if (!win.isDestroyed()) win.webContents.send('native-audio:state', state); });
@@ -34,5 +35,5 @@ export function registerNativeAudio(win, _config, handle) {
   handle('native-audio:load', value => audioResult(() => { if (!value?.context) throw new Error('Missing native load context.'); return audio.load(value); }));
   handle('native-audio:command', (command, value, context) => audioResult(() => { if (!context) throw new Error('Missing native command context.'); return audio.command(command, value, context); }));
   win.webContents.on('did-start-navigation', (_event, _url, inPlace, mainFrame) => { if (mainFrame && !inPlace) { audio.resetCommands(); void audio.command('stop').then(() => audio.setMeter(false)).catch(() => {}); } });
-  win.on('closed', () => { void audio.dispose().catch(error => console.warn('Audio shutdown cleanup deferred:', error.message)); });
+  win.on('closed', () => { void audio.dispose().catch(error => log('warn', 'ShutdownCleanup', { error })).finally(() => sessions.delete(audio)); });
 }

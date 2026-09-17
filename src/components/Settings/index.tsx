@@ -22,7 +22,7 @@ import { useLyricOffset } from '../../lyrics/useLyricOffset';
 import { LyricsTimingControls } from '../Lyrics/LyricsTiming';
 import { VolumeControl } from '../VolumeControl';
 
-const categories = ['Appearance', 'Lyrics', 'Playback', 'Online services', 'Storage'] as const;
+const categories = ['Appearance', 'Lyrics', 'Playback', 'Online services', 'Storage', 'Advanced'] as const;
 function SettingsContent() {
   const [tab, setTab] = useState<typeof categories[number]>('Appearance'), locale = useLanguage(), theme = useAppTheme(), surface = useSurface(), configError = useConfigReadError();
   const track = useAppSelector(state => state.library.tracks.find(track => track.id === state.player.currentId));
@@ -43,7 +43,8 @@ function SettingsContent() {
     </div>
     <div hidden={tab !== 'Playback'} className='settings-category'><header><h2>{t('Playback')}</h2></header><section><h3>{t('Volume')}</h3><VolumeControl /></section><AudioOutputSettings active={tab === 'Playback'} /><NormalizationSettings /><ListeningTimeSettings /></div>
     <div hidden={tab !== 'Online services'} className='settings-category'><header><h2>{t('Online services')}</h2></header><SpotifySettings /><DeepSeekSettings /></div>
-    <div hidden={tab !== 'Storage'} className='settings-category'><header><h2>{t('Storage')}</h2></header><AutoImportFolder /><DesktopStorageSettings /><DiagnosticsSettings /></div>
+    <div hidden={tab !== 'Storage'} className='settings-category'><header><h2>{t('Storage')}</h2></header><AutoImportFolder /><DesktopStorageSettings /></div>
+    <div hidden={tab !== 'Advanced'} className='settings-category'><header><h2>{t('Advanced')}</h2></header><DiagnosticsSettings /></div>
   </div></div>;
 }
 export function SettingsDrawer() {

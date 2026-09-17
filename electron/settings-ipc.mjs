@@ -1,5 +1,7 @@
 import { registerNativeAudio } from './native-audio-ipc.mjs';
-import { shell } from 'electron';
+import { shell, app } from 'electron';
+import { mkdir } from 'node:fs/promises';
+import { redactDiagnostic } from './log-redaction.mjs';
 import { SpotifyService } from './spotify.mjs';
 import { ipcMain, dialog } from 'electron';
 import { isAppUrl } from './policy.mjs';
@@ -11,7 +13,7 @@ export function registerSettingsIpc(win, config, folders, devUrl, logger) {
     if (event.sender !== win.webContents || event.senderFrame !== win.webContents.mainFrame || !isAppUrl(event.senderFrame.url, devUrl)) throw new Error('Untrusted settings request.');
     return fn(...args);
   });
-  registerNativeAudio(win, config, handle);
+  registerNativeAudio(win, config, handle, logger);
   const spotify = new SpotifyService(config, url => shell.openExternal(url));
   handle('spotify:info', () => spotify.info());
   handle('spotify:login', clientId => spotify.login(clientId));
@@ -27,11 +29,15 @@ export function registerSettingsIpc(win, config, folders, devUrl, logger) {
     win.webContents.setZoomFactor(factor); return factor;
   });
   handle('desktop-config:get', key => { if (!allowed.has(key)) throw new Error('Unknown setting.'); return config.get(key); });
-  handle('desktop-config:set', async (key, value) => { if (!allowed.has(key)) throw new Error('Unknown setting.'); await config.set(key, value); if (key === 'diagnostics') logger?.setDebug(value.debug); });
+  handle('desktop-config:set', async (key, value) => { if (!allowed.has(key)) throw new Error('Unknown setting.'); if (key === 'diagnostics') { if (!value || typeof value.debug !== 'boolean' || Object.keys(value).some(key => key !== 'debug')) throw new Error('Invalid debug settings.'); logger?.setDebug(value.debug); } await config.set(key, value); });
   handle('desktop-log:write', entry => logger?.write(entry));
   handle('desktop-log:read', () => logger?.read() ?? '');
+  handle('desktop-log:clear', () => logger?.clear());
+  handle('desktop-log:info', async () => redactDiagnostic({ version: app.getVersion(), versions: process.versions, platform: process.platform, arch: process.arch,
+    processMemory: app.getAppMetrics().map(item => ({ type: item.type, workingSetBytes: item.memory.workingSetSize * 1024 })),
+    httpCacheBytes: await win.webContents.session.getCacheSize(), logs: await logger?.info() }));
   handle('desktop-log:path', () => logger?.file ?? '');
-  handle('desktop-log:open', async () => { if (!logger) return; await logger.queue; const error = await shell.openPath(logger.directory); if (error) throw new Error(error); });
+  handle('desktop-log:open', async () => { if (!logger) return; await logger.queue; await mkdir(logger.directory, { recursive: true }); const error = await shell.openPath(logger.directory); if (error) throw new Error(error); });
   handle('desktop-log:devtools', () => { if (!logger?.debug) throw new Error('Enable debug mode first.'); win.webContents.openDevTools({ mode: 'detach' }); });
   handle('desktop-config:path', () => config.file);
   handle('desktop-folder:info', () => folders.info());

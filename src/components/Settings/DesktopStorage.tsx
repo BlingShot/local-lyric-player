@@ -1,3 +1,4 @@
+import { diagnosticLog } from '../../desktop/diagnostics';
 import { t } from '../../i18n';
 import { useEffect, useState } from 'react';
 import type { DesktopStorageInfo } from '../../desktop/types';
@@ -36,7 +37,7 @@ export function DesktopStorageSettings() {
         </div>
       </div>)}
       <p>{t("HTTP cache limit: 128 MB. Code and graphics caches are stored separately here and can be regenerated.")}</p>
-      <div className='settings-folder-actions'><button className='lyrics-import-button' disabled={disabled} onClick={() => void run(() => desktop.clearCache(), 'Cache cleared. Songs, lyrics and settings are kept.')}>{t("Clear cache")}</button>
+      <div className='settings-folder-actions'><button className='lyrics-import-button' disabled={disabled} onClick={() => void run(async () => { const result = await desktop.clearCache(); window.dispatchEvent(new Event('local-cache-cleared')); diagnosticLog('info', 'cache', 'Generated caches cleared; library, lyrics and Studio drafts retained.'); return result; }, 'Cache cleared. Songs, lyrics and settings are kept.')}>{t("Clear cache")}</button>
         <button className='lyrics-import-button' disabled={disabled} onClick={() => void run(desktop.storageInfo)}>{t("Refresh usage")}</button></div>
       <p>{t("App memory:")}{' '}{size(info.memoryBytes)} {t("at last refresh. This includes Chromium, playback buffers and any active analysis.")}</p>
       {info.pending && <div className='desktop-storage-pending'>

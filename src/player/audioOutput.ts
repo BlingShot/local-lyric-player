@@ -32,3 +32,5 @@ export async function initializeAudioOutput() {
   if (window.localMusicDesktop?.nativeAudioLoad && saved && (saved.device === 'auto' || /^wasapi\//.test(saved.device))) await updateAudioOutput({ device: saved.device, exclusive: saved.exclusive === true }, false);
   else publish({ ready: true });
 }
+
+export function getAudioOutputDiagnostics() { return { ...state.settings, deviceLabel: state.devices.find(device => device.name === state.settings.device)?.description, ready: state.ready, busy: state.busy, error: state.error }; }

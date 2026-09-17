@@ -1,0 +1,5 @@
+.debug-panel nav { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 12px; }
+.debug-panel button { font: inherit; color: inherit; background: transparent; border: 1px solid currentColor; border-radius: 6px; padding: 6px 12px; cursor: pointer; }
+.debug-panel button[aria-pressed='true'] { font-weight: 700; text-decoration: underline; text-underline-offset: 4px; }
+.debug-panel pre { white-space: pre-wrap; overflow-wrap: anywhere; max-height: 52vh; overflow: auto; padding: 12px; background: rgb(127 127 127 / 8%); border-radius: 8px; font-size: 12px; line-height: 1.6; }
+.debug-modal .settings-folder-actions { flex-wrap: wrap; }
