@@ -36,7 +36,7 @@ declare global {
       debugInfo(): Promise<unknown>;
       logPath(): Promise<string>;
       openLogFolder(): Promise<void>;
-      openDebugTools(): Promise<void>;
+      openDebugTools(): Promise<boolean>;
       getFont(slot: FontTarget): Promise<LocalFont>;
       setFont(slot: FontTarget, font: LocalFont): Promise<void>;
       importFolderInfo(): Promise<{ name: string; path: string } | null>;
