@@ -43,7 +43,10 @@ export function registerSettingsIpc(win, config, folders, devUrl, logger) {
   handle('desktop-log:devtools', async () => {
     const contents = win.webContents;
     if (contents.isDestroyed()) throw new Error('The application window is no longer available.');
-    if (contents.isDevToolsOpened()) { contents.focusDevTools(); return true; }
+    if (contents.isDevToolsOpened()) {
+      contents.openDevTools({ activate: true });
+      return true;
+    }
 
     const waitForOpen = timeoutMs => new Promise(resolve => {
       let finished = false;
@@ -68,18 +71,12 @@ export function registerSettingsIpc(win, config, folders, devUrl, logger) {
     for (const mode of ['detach', 'undocked', 'right']) {
       try {
         contents.openDevTools({ mode, activate: true });
-        if (await waitForOpen(2000)) {
-          contents.focusDevTools();
-          return true;
-        }
+        if (await waitForOpen(2000)) return true;
       } catch (error) {
         lastError = error;
       }
       if (contents.isDestroyed()) throw new Error('The application window is no longer available.');
-      if (contents.isDevToolsOpened()) {
-        contents.focusDevTools();
-        return true;
-      }
+      if (contents.isDevToolsOpened()) return true;
     }
     if (lastError) throw lastError;
     throw new Error('Developer tools did not open.');
