@@ -103,7 +103,7 @@ export function GlobalDebugOverlay() {
     <div className='debug-readout-row'>
       <DebugField label='FPS' value={text(metrics.fps)} />
       <DebugField label='Heap' value={bytes(heap.usedBytes)} />
-      <DebugField label='Warn / Error' value={`${warnings} / ${errors}`} />
+      <DebugField label='Warn/Error' value={`${warnings} / ${errors}`} />
     </div>
     <div className='debug-readout-row debug-readout-secondary'>
       <DebugField label='Switch' value={metrics.songSwitchMs === undefined ? '—' : `${text(metrics.songSwitchMs)}ms`} />
