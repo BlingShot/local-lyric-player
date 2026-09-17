@@ -21,7 +21,7 @@ export const zh08: Record<string, string> = {
   'Native playback devices are available in the Windows desktop app.': '原生播放设备选项仅在 Windows 桌面应用中可用。',
   'Switching playback device...': '正在切换播放设备…',
   'Searching Spotify ISRC...': '正在查询 Spotify ISRC…', 'Searching AMLL TTML...': '正在搜索 AMLL 歌词…',
-  'Searching AMLL by title and artist...': '正在按歌名和歌手搜索 AMLL…', 'Downloading AMLL TTML...': '正在下载 AMLL TTML…',
+  'Searching AMLL by title and artist...': '正在按歌名和歌手搜索 AMLL…', 'Downloading AMLL TTML...': '正在下载 AMLL 歌词…',
   'AMLL has no matching TTML. Using local lyrics.': 'AMLL 暂无匹配的 TTML，使用本地歌词。',
   'AMLL has multiple recording matches. Using local lyrics.': 'AMLL 存在多个录音版本，暂时使用本地歌词。',
   'Spotify lookup failed and AMLL title search found no match. Using local lyrics.': 'Spotify 查询失败，AMLL 歌名搜索未找到匹配，使用本地歌词。',
@@ -32,8 +32,8 @@ export const zh08: Record<string, string> = {
 
 Object.assign(zh08, {
   'Align lyrics by performer': '按演唱者左右对齐', 'Show performer labels': '显示演唱者标签',
-  'Weight': '字重', 'Width': '宽度', 'Application font weight': '应用字体字重', 'Lyric font weight': '歌词字体字重',
-  'Application font width': '应用字体宽度', 'Lyric font width': '歌词字体宽度', 'Application letter spacing': '应用字间距', 'Lyric letter spacing': '歌词字间距',
+  'Weight': '字重', 'Width': '字宽', 'Application font weight': '应用字体字重', 'Lyric font weight': '歌词字体字重',
+  'Application font width': '应用字体字宽', 'Lyric font width': '歌词字体字宽', 'Application letter spacing': '应用字间距', 'Lyric letter spacing': '歌词字间距',
   'Variable axes require a supporting font. Other fonts use available faces or browser synthesis.': '可变字体轴需要字体支持，其他字体使用已有字形或浏览器合成效果。',
   'Make it yours': '你的个性设置', 'Interface': '界面', 'Every voice, every word': '每个声部，每个字词',
   'Your sound': '你的声音', 'Optional connections': '可选连接', 'On this device': '保存在此设备', 'Day': '日间',
