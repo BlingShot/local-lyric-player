@@ -1,14 +1,21 @@
 import { app, dialog, ipcMain, shell } from 'electron';
+import path from 'node:path';
 import { directoryBytes } from './storage.mjs';
 import { isAppUrl } from './policy.mjs';
 
 export function registerStorageIpc(win, storage, devUrl) {
   const ses = win.webContents.session;
   let busy = false;
-  const info = async () => ({ ...storage.config, pending: storage.pending,
+  // One bounded maintenance check at startup, not a diagnostic polling loop.
+  // Only Chromium-generated caches are touched; IndexedDB and imported files stay intact.
+  const maintenance = (async () => {
+    if (await directoryBytes(path.join(storage.config.cachePath, 'Code Cache')) > 64 * 1024 * 1024) await ses.clearCodeCaches({});
+    if (await ses.getCacheSize() > 128 * 1024 * 1024) await ses.clearCache();
+  })().catch(() => {});
+  const info = async () => { await maintenance; return ({ ...storage.config, pending: storage.pending,
     dataBytes: await directoryBytes(storage.config.dataPath), cacheBytes: await directoryBytes(storage.config.cachePath),
     httpCacheBytes: await ses.getCacheSize(),
-    memoryBytes: app.getAppMetrics().reduce((sum, item) => sum + item.memory.workingSetSize * 1024, 0) });
+    memoryBytes: app.getAppMetrics().reduce((sum, item) => sum + item.memory.workingSetSize * 1024, 0) }); };
   const handle = (name, action) => ipcMain.handle(`desktop-storage:${name}`, async (event, ...args) => {
     if (event.sender !== win.webContents || event.senderFrame !== win.webContents.mainFrame || !isAppUrl(event.senderFrame.url, devUrl)) throw new Error('Untrusted storage request.');
     return action(...args);
@@ -29,7 +36,7 @@ export function registerStorageIpc(win, storage, devUrl) {
     if (busy) throw new Error('Another storage operation is running.');
     busy = true;
     try {
-      await ses.clearCache();
+      await maintenance; await ses.clearCache();
       await ses.clearCodeCaches({});
       await ses.clearStorageData({ storages: ['shadercache'] });
       return info();

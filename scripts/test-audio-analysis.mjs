@@ -5,6 +5,7 @@ import { resolve } from 'node:path';
 import { writeFile } from 'node:fs/promises';
 import assert from 'node:assert/strict';
 import { createAudioAnalysisFixtures } from './audio-analysis-fixtures.mjs';
+import { redactDiagnostic } from '../electron/log-redaction.mjs';
 
 const root = await createAudioAnalysisFixtures(), port = 4183, origin = `http://127.0.0.1:${port}`;
 const server = await preview({ preview: { host: '127.0.0.1', port, strictPort: true } });
@@ -99,7 +100,8 @@ try {
 
   phase = 'playback, cancellation and serial queue';
   await page.getByRole('link', { name: 'Back to library', exact: true }).click();
-  await page.locator('.offline-track-name').first().click();
+  // Match the current library interaction: one pointer click selects; double-click plays.
+  await page.locator(`tr[data-track-id="${tracks.find(track => track.fileName === 'beat-441-mono.wav').id}"] .offline-track-name`).dblclick();
   await page.waitForFunction(() => !document.querySelector('audio').paused);
   await page.evaluate(() => { window.__playingAudio = document.querySelector('audio'); window.__frames = 0; const tick = () => { window.__frames++; requestAnimationFrame(tick); }; requestAnimationFrame(tick); });
   await page.locator('.offline-track-name').filter({ hasText: 'beat-480-stereo.wav' }).click({ button: 'right' }); await page.getByRole('menuitem', { name: 'Analyze', exact: true }).click();
@@ -153,7 +155,7 @@ try {
   await writeFile(resolve(root, 'cache-test.ttml'), '<tt xmlns="http://www.w3.org/ns/ttml"><body><div><p begin="1s" end="4s">First test line</p><p begin="6s" end="12s">Second test line</p></div></body></tt>');
   await page.getByLabel('Choose studio lyrics', { exact: true }).setInputFiles(resolve(root, 'cache-test.ttml'));
   const importPreview = page.getByRole('dialog', { name: 'Import into Lyric Studio', exact: true });
-  await importPreview.getByRole('button', { name: 'Use line timings', exact: true }).click(); await importPreview.waitFor({ state: 'hidden' });
+  await importPreview.getByRole('button', { name: 'Use imported project', exact: true }).click(); await importPreview.waitFor({ state: 'hidden' });
   await page.getByLabel('Lyrics line 1', { exact: true }).fill('Edited test lyric text');
   await page.locator('.studio-save-status').filter({ hasText: 'Draft saved' }).waitFor();
   assert.ok((await waitDone(long.id)).every(task => task.status === 'complete'));
@@ -213,5 +215,16 @@ try {
   assert.deepEqual(errors, []); assert.deepEqual(external, []);
   const report = { result: 'passed', checks, measurements, errors, external };
   await writeFile('test-results/audio-analysis/report.json', JSON.stringify(report, null, 2)); console.log(JSON.stringify(report, null, 2));
-} catch (error) { console.error(JSON.stringify({ phase, tasks: await read('analysis-tasks').catch(() => []), errors, external })); await page.screenshot({ path: 'test-results/audio-analysis/failure.png' }); throw error; }
+} catch (error) {
+  const playback = await page.evaluate(() => {
+    const audio = document.getElementById('local-audio');
+    return audio ? { paused: audio.paused, currentTime: audio.currentTime, readyState: audio.readyState,
+      networkState: audio.networkState, error: audio.error && { code: audio.error.code, message: audio.error.message },
+      elementCount: window.__audioCount, workers: window.__analysisWorkers } : null;
+  }).catch(() => null);
+  const report = redactDiagnostic({ result: 'failed', phase, error, playback,
+    tasks: await read('analysis-tasks').catch(() => []), checks, measurements, errors, external });
+  await writeFile('test-results/audio-analysis/failure.json', JSON.stringify(report, null, 2));
+  console.error(JSON.stringify(report)); await page.screenshot({ path: 'test-results/audio-analysis/failure.png' }); throw error;
+}
 finally { await context.close(); await browser.close(); await new Promise(resolve => server.httpServer.close(resolve)); }

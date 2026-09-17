@@ -1,3 +1,5 @@
+import { observeAudioDiagnostics } from './desktop/debugSources';
+import { getLocalAudioElement } from './player/runtime';
 import { initializeDiagnostics } from './desktop/diagnostics';
 import { initializeTypography } from './theme/typography';
 import { initializeAudioOutput } from './player/audioOutput';
@@ -14,6 +16,7 @@ import { initializeDesktopZoom } from './desktop/zoom';
 import { initializeLocalFonts } from './theme/fonts';
 import { initializeLanguage } from './i18n';
 
+observeAudioDiagnostics(getLocalAudioElement());
 void initializeDiagnostics();
 void initializeDeepSeekConfig();
 void initializeThemeConfig();

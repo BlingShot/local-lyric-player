@@ -27,7 +27,7 @@ const retiredAssets = new Set([
   'favicon.ico', 'favicon16.png', 'favicon32.png', '404.html',
 ]);
 await cp('build', '.cache/desktop-app/build', { recursive: true,
-  filter: source => !retiredAssets.has(path.relative(path.resolve('build'), path.resolve(source)).split(path.sep).join('/')),
+  filter: source => !/\.(?:map|log)$/.test(source) && !retiredAssets.has(path.relative(path.resolve('build'), path.resolve(source)).split(path.sep).join('/')),
 });
 await cp('electron', '.cache/desktop-app/electron', { recursive: true });
 await cp('LICENSE', '.cache/desktop-app/LICENSE');

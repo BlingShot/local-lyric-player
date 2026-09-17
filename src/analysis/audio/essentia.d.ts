@@ -4,3 +4,7 @@ declare module 'essentia.js/dist/essentia.js-core.es.js' {
 declare module 'essentia.js/dist/essentia-wasm.es.js' {
   export const EssentiaWASM: any;
 }
+
+declare module 'essentia.js/dist/essentia-wasm.web.js' {
+  export default function createEssentia(options: { locateFile: (file: string) => string }): Promise<any>;
+}

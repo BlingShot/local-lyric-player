@@ -1,6 +1,6 @@
 {
   "name": "lyric-player",
-  "version": "0.8.2",
+  "version": "0.8.3",
   "private": true,
   "type": "module",
   "scripts": {
@@ -38,7 +38,9 @@
     "test:sync": "node scripts/test-sync-localization.mjs",
     "test:fonts": "node --test tests/desktop-fonts.test.mjs tests/desktop-policy.test.mjs",
     "test:v08": "node scripts/test-v08.mjs",
-    "test:native-audio": "node scripts/test-native-audio.mjs"
+    "test:native-audio": "node scripts/test-native-audio.mjs",
+    "test:debug": "node scripts/test-debug-diagnostics.mjs",
+    "desktop:budget": "node scripts/check-package-size.mjs"
   },
   "engines": {
     "node": ">=22.13.0"

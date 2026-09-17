@@ -10,10 +10,13 @@ files:
   - package.json
   - LICENSE
   - '!node_modules/**/*'
+  - '!**/*.map'
+  - '!**/test-results/**/*'
+  - '!**/*.log'
 extraResources:
   - from: desktop/native
     to: native
-    filter: ['mpv.exe', 'mpv.com', 'vulkan-1.dll', '*.txt', '*.md']
+    filter: ['mpv.exe', 'vulkan-1.dll', '*.txt', '*.md']
 asar: true
 compression: maximum
 # Match the two interface languages; preserve ICU. Text uses fonts on the computer.

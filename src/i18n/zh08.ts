@@ -1,4 +1,9 @@
 export const zh08: Record<string, string> = {
+  'Advanced': '高级', 'Debug Panel': '调试面板', 'Live Debug': '实时调试', 'Debug categories': '调试分类',
+  'Audio': '音频', 'Performance': '性能', 'Errors': '错误', 'Sampled at': '采样时间',
+  'Copy Debug Info': '复制调试信息', 'Export Debug Report': '导出调试报告', 'Open Log Folder': '打开日志文件夹',
+  'Clear Logs': '清空日志', 'Debug info copied.': '调试信息已复制。', 'Logs cleared.': '日志已清空。',
+  'Logs stay on this device. Credentials and user paths are redacted. Debug sampling stops when disabled.': '日志仅保存在本机，凭据和用户路径默认脱敏。关闭调试后停止采样。',
   'Unsaved recovery drafts': '未提交的恢复草稿', 'Restore draft': '恢复草稿', 'Discard recovery': '丢弃恢复副本',
   'Discard this recovery copy? Export any needed work first.': '丢弃此恢复副本？请先导出仍需保留的内容。',
   'Appearance': '外观', 'Lyrics': '歌词', 'Playback': '播放', 'Online services': '在线服务', 'Storage': '存储',

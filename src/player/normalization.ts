@@ -152,3 +152,6 @@ export function disposeNormalization() {
   context = undefined; gain = undefined; source = undefined; audio = undefined; currentId = null;
   scheduledGain = undefined;
 }
+
+// Read-only diagnostic view; does not create or resume the audio graph.
+export function getAudioGraphDiagnostics() { return { state: context?.state || 'not-created', sampleRate: context?.sampleRate, baseLatency: context?.baseLatency, nativeMode, sourceConnected: !!source, gainDb: state.appliedDb, error: state.error }; }

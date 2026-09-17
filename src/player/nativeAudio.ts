@@ -1,3 +1,4 @@
+import { diagnosticLog } from '../desktop/diagnostics';
 import { nativeVolumePercent } from './normalizationMath';
 import { getNormalization, subscribeNormalization, setNativeNormalizationMode } from './normalization';
 import { NativePlaybackError, playbackError, unwrapAudioResult, type NativeCommandContext, type PlaybackErrorInfo } from './playbackErrors';
@@ -11,6 +12,7 @@ export async function configureNativeOutput(choice: AudioOutputChoice) {
 const cancelled = () => new NativePlaybackError({ kind: 'cancelled', message: 'Playback request was superseded.' });
 const report = (error: unknown) => {
   if (playbackError(error)?.kind === 'cancelled') return;
+  diagnosticLog('error', 'audio.native', 'Native playback failed.', { error, fault: playbackError(error) });
   window.dispatchEvent(new CustomEvent('native-audio-error', { detail: error instanceof Error ? error.message : String(error) }));
 };
 export function attachNativeAudio(audio: HTMLAudioElement, getBlob: () => Blob | undefined) {
@@ -62,14 +64,20 @@ export function attachNativeAudio(audio: HTMLAudioElement, getBlob: () => Blob |
     resourceId = id; pendingSeek = Promise.resolve(); pendingSeekTarget = undefined;
     state = { id, time: 0, duration: 0, paused: true, ended: false, ready: false }; fault = null; sampleAt = performance.now();
     emit('emptied'); emit('loadstart');
+    let phase = 'Read';
+    diagnosticLog('debug', 'audio.native', 'Load attempt started.', { id, generation: token, device: output, bytes: blob?.size, mimeType: blob?.type });
     pending = (async () => {
       if (!blob) throw new NativePlaybackError({ kind: 'file-unavailable', message: 'The saved audio copy is unavailable.' });
       const bytes = await blob.arrayBuffer();
+      diagnosticLog('debug', 'audio.native', 'Read completed.', { id, bytes: bytes.byteLength }); phase = 'NativeIPC';
       if (token !== generation || !native()) throw cancelled();
       unwrapAudioResult(await desktop.nativeAudioLoad({ id, bytes, device: output.device, exclusive: output.exclusive, position: 0, volume: outputVolume(), speed, context: context() }));
       if (token !== generation || !native()) throw cancelled();
     })();
-    void pending.catch(error => { if (token === generation && native()) fail(error); });
+    void pending.then(() => diagnosticLog('debug', 'audio.native', 'Load completed.', { id, generation: token })).catch(error => {
+      diagnosticLog(playbackError(error)?.kind === 'cancelled' ? 'debug' : 'error', 'audio.native', 'Load did not complete.', { id, generation: token, stage: phase, error });
+      if (token === generation && native()) fail(error);
+    });
     return pending;
   };
   const unsubscribe = desktop.onNativeAudioState(next => {

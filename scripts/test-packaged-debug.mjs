@@ -1,0 +1,145 @@
+import { _electron as electron } from 'playwright';
+import assert from 'node:assert/strict';
+import { mkdir, mkdtemp, readFile, writeFile, readdir, stat, copyFile } from 'node:fs/promises';
+import path from 'node:path';
+import { pathToFileURL } from 'node:url';
+
+const output = path.resolve('test-results/packaged-debug');
+await mkdir(output, { recursive: true });
+const root = await mkdtemp(path.join(output, 'run-')), profile = path.join(root, 'profile');
+await mkdir(profile); await writeFile(path.join(profile, 'config.json'), JSON.stringify({ version: 1, settings: { language: 'en' } }));
+const entry = path.join(root, 'entry.mjs');
+const bundle = pathToFileURL(path.resolve('release/win-unpacked/resources/app.asar/electron/app.mjs')).href;
+await writeFile(entry, (await readFile('scripts/desktop-smoke-entry.mjs', 'utf8')).replace('../electron/app.mjs', bundle).replace('show: false,', 'show: false, offscreen: true,'));
+const env = { ...process.env, DESKTOP_TEST_PROFILE: profile, DESKTOP_TEST_DOWNLOADS: root };
+delete env.ELECTRON_RUN_AS_NODE; delete env.LOCAL_MUSIC_DEV_URL;
+let application, phase = 'launch'; const errors = [], checks = [];
+try {
+  application = await electron.launch({ args: [entry], env, timeout: 30000 });
+  const page = await application.firstWindow(); page.setDefaultTimeout(20000);
+  page.on('pageerror', error => errors.push(error.message));
+  await page.getByRole('heading', { name: 'Local library', exact: true }).waitFor();
+  assert.equal(page.url(), 'localmusic://app/');
+  await page.getByRole('button', { name: 'Settings', exact: true }).click();
+  await page.getByRole('button', { name: 'Advanced', exact: true }).click();
+  assert.equal(await page.getByRole('checkbox', { name: 'Debug mode', exact: true }).isChecked(), false);
+  phase = 'real normal-mode log IPC';
+  await page.evaluate(async () => {
+    await window.localMusicDesktop.writeLog({ level: 'debug', scope: 'test', message: 'normal-mode-noise' });
+    await window.localMusicDesktop.writeLog({ level: 'info', scope: 'test', message: 'normal-mode-info' });
+  });
+  let logs = await page.evaluate(() => window.localMusicDesktop.readLog());
+  assert.ok(logs.includes('normal-mode-info')); assert.ok(!logs.includes('normal-mode-noise'));
+  await assert.rejects(page.evaluate(() => window.localMusicDesktop.openDebugTools()), /Enable debug mode/);
+  checks.push('Packaged preload/main IPC filters DEBUG by default and gates developer tools.');
+  phase = 'real debug-mode persistence and redaction';
+  await page.getByRole('checkbox', { name: 'Debug mode', exact: true }).check();
+  await page.waitForFunction(async () => (await window.localMusicDesktop.getConfig('diagnostics'))?.debug === true);
+  await page.evaluate(async () => {
+    await window.localMusicDesktop.writeLog({ level: 'debug', scope: 'audio.test', message: 'decode-stage-recorded',
+      data: { path: 'C:\\Users\\PrivateUser\\Music\\test.flac', apiKey: 'fixture-secret-not-real', error: { stack: 'Decode at C:\\Users\\PrivateUser\\Music\\test.flac' } } });
+  });
+  logs = await page.evaluate(() => window.localMusicDesktop.readLog());
+  assert.ok(logs.includes('decode-stage-recorded')); assert.ok(logs.includes('test.flac'));
+  assert.ok(!logs.includes('PrivateUser')); assert.ok(!logs.includes('fixture-secret-not-real'));
+  await page.getByRole('button', { name: 'Debug Panel', exact: true }).click();
+  const panel = page.locator('.debug-modal');
+  await panel.getByRole('button', { name: 'Performance', exact: true }).click();
+  await page.waitForFunction(() => document.querySelector('.debug-modal pre')?.textContent.includes('workingSetBytes'));
+  phase = 'native folder and report export';
+  await application.evaluate(({ shell }) => { globalThis.openedLogFolder = ''; shell.openPath = async folder => { globalThis.openedLogFolder = folder; return ''; }; });
+  await panel.getByRole('button', { name: 'Open Log Folder', exact: true }).click();
+  assert.equal(await application.evaluate(() => globalThis.openedLogFolder), path.join(profile, 'logs'));
+  // Electron's app-owned will-download handler saves directly; unlike a browser
+  // context it does not promise Playwright's page 'download' notification.
+  await panel.getByRole('button', { name: 'Export Debug Report', exact: true }).click();
+  const deadline = Date.now() + 20000;
+  let nativeDownloads = [];
+  do {
+    nativeDownloads = await application.evaluate(() => globalThis.desktopDownloads);
+    if (nativeDownloads.some(item => item.state === 'completed')) break;
+    await new Promise(resolve => setTimeout(resolve, 100));
+  } while (Date.now() < deadline);
+  assert.ok(nativeDownloads.some(item => item.state === 'completed'), `Native report export did not finish: ${JSON.stringify(nativeDownloads)}`);
+  const saved = nativeDownloads.find(item => /^lyric-player-debug-.*\.json$/.test(item.name || ''));
+  assert.ok(saved && !saved.prevented, 'A real report download must be accepted by the trusted native session.');
+  await copyFile(path.join(root, path.basename(saved.name)), path.join(output, 'debug-report.json'));
+  const reportText = await readFile(path.join(output, 'debug-report.json'), 'utf8'), report = JSON.parse(reportText);
+  assert.equal(report.environment.version, '0.8.3'); assert.equal(report.debugMode, true);
+  assert.ok(reportText.includes('decode-stage-recorded')); assert.ok(!reportText.includes('PrivateUser'));
+  assert.ok(!reportText.includes('fixture-secret-not-real')); assert.ok(report.environment.desktop.processMemory.length > 0);
+  checks.push('Real main-process diagnostics, user-path/secret redaction, log-folder IPC and packaged report download pass.');
+  phase = 'native clipboard report copy';
+  await application.evaluate(({ clipboard }) => clipboard.writeText('clipboard-test-sentinel'));
+  await panel.getByRole('button', { name: 'Copy Debug Info', exact: true }).click();
+  const copyDeadline = Date.now() + 20000;
+  let copied = '';
+  do {
+    copied = await application.evaluate(({ clipboard }) => clipboard.readText());
+    if (copied.includes('reportVersion')) break;
+    await new Promise(resolve => setTimeout(resolve, 100));
+  } while (Date.now() < copyDeadline);
+  assert.equal(JSON.parse(copied).reportVersion, 1);
+  assert.ok(copied.includes('decode-stage-recorded')); assert.ok(!copied.includes('PrivateUser'));
+  assert.ok(!copied.includes('fixture-secret-not-real'));
+  await assert.rejects(page.evaluate(() => window.localMusicDesktop.copyDebugInfo('{}')), /Invalid debug report/);
+  assert.equal(await application.evaluate(({ clipboard }) => clipboard.readText()), copied);
+  checks.push('Copy Debug Info writes a redacted report to the real native clipboard; invalid input leaves it unchanged and no read capability is exposed to the renderer.');
+  phase = 'clear log files';
+  const sentinel = path.join(profile, 'logs', 'keep.txt'); await writeFile(sentinel, 'user data');
+  await panel.getByRole('button', { name: 'Clear Logs', exact: true }).click();
+  await page.waitForFunction(async () => !(await window.localMusicDesktop.readLog()).includes('decode-stage-recorded'));
+  assert.equal(await readFile(sentinel, 'utf8'), 'user data');
+  await panel.locator('.ant-modal-close').click();
+  await page.getByRole('checkbox', { name: 'Debug mode', exact: true }).uncheck();
+  await page.waitForFunction(async () => (await window.localMusicDesktop.getConfig('diagnostics'))?.debug === false);
+  phase = 'native cache clearing preserves IndexedDB';
+  await page.evaluate(() => new Promise((resolve, reject) => {
+    const request = indexedDB.open('debug-cache-preservation');
+    request.onupgradeneeded = () => request.result.createObjectStore('sentinel');
+    request.onerror = () => reject(request.error);
+    request.onsuccess = () => { const db = request.result, tx = db.transaction('sentinel', 'readwrite');
+      tx.objectStore('sentinel').put('keep-durable-data', 'marker');
+      tx.oncomplete = () => { db.close(); resolve(); }; tx.onabort = () => reject(tx.error); };
+  }));
+  await page.getByRole('button', { name: 'Storage', exact: true }).click();
+  await page.getByRole('button', { name: 'Clear cache', exact: true }).click();
+  await page.getByRole('status').filter({ hasText: 'Cache cleared.' }).waitFor();
+  const durable = await page.evaluate(() => new Promise((resolve, reject) => {
+    const request = indexedDB.open('debug-cache-preservation');
+    request.onerror = () => reject(request.error);
+    request.onsuccess = () => { const db = request.result, tx = db.transaction('sentinel');
+      const marker = tx.objectStore('sentinel').get('marker');
+      tx.oncomplete = () => { db.close(); resolve(marker.result); }; tx.onabort = () => reject(tx.error); };
+  }));
+  assert.equal(durable, 'keep-durable-data');
+  const storage = await page.evaluate(() => window.localMusicDesktop.storageInfo());
+  assert.ok(Number.isFinite(storage.httpCacheBytes) && storage.httpCacheBytes >= 0);
+  checks.push('The real Clear cache settings action completes through Electron and preserves durable IndexedDB data.');
+  phase = 'packaged WASM worker through secure local protocol';
+  const workerAsset = (await readdir('build/assets')).find(name => /^analysis\.worker-.*\.js$/.test(name));
+  assert.ok(workerAsset);
+  const result = await page.evaluate(workerAsset => new Promise((resolve, reject) => {
+    const worker = new Worker(`localmusic://app/assets/${workerAsset}`);
+    const timeout = setTimeout(() => { worker.terminate(); reject(new Error('Packaged WASM initialization timed out.')); }, 20000);
+    worker.onerror = event => { clearTimeout(timeout); worker.terminate(); reject(new Error(event.message)); };
+    worker.onmessage = event => { clearTimeout(timeout); worker.terminate(); resolve(event.data); };
+    worker.postMessage({ id: 'smoke', trackId: 'smoke', kind: 'bpm', pcm: new Float32Array(44100), range: { analysisSampleRate: 44100, analysisFrames: 44100, start: 0, end: 1 }, sourceMetadata: {} });
+  }), workerAsset);
+  assert.equal(result.error, undefined); assert.equal(result.result.outcome, 'unreliable');
+  checks.push('The packaged analysis Worker loads its real WASM through localmusic:// under the production CSP.');
+  phase = 'restart';
+  await page.reload(); await page.getByRole('heading', { name: 'Local library', exact: true }).waitFor();
+  await page.getByRole('button', { name: 'Settings', exact: true }).click();
+  await page.getByRole('button', { name: 'Advanced', exact: true }).click();
+  assert.equal(await page.getByRole('checkbox', { name: 'Debug mode', exact: true }).isChecked(), false);
+  assert.deepEqual(errors, []);
+  await page.screenshot({ path: path.join(output, 'advanced.png') });
+  const files = await readdir(path.join(profile, 'logs'));
+  for (const file of files.filter(name => /^player\.log(?:\.[12])?$/.test(name))) assert.ok((await stat(path.join(profile, 'logs', file))).size <= 2 * 1024 * 1024);
+  checks.push('Clear Logs preserves unrelated files; the disabled preference survives reload.');
+  await writeFile(path.join(output, 'report.json'), JSON.stringify({ passed: true, checks, errors }, null, 2));
+  console.log(JSON.stringify({ passed: true, checks }, null, 2));
+} catch (error) {
+  await writeFile(path.join(output, 'failure.json'), JSON.stringify({ phase, error: String(error), stack: error.stack, errors, checks, downloads: await application?.evaluate(() => globalThis.desktopDownloads).catch(() => []) }, null, 2)); throw error;
+} finally { await application?.close(); }
