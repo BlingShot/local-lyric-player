@@ -8,18 +8,46 @@ import { getAudioOutputDiagnostics } from '../player/audioOutput';
 import { isDebugMode, registerDebugSource, diagnosticLog, diagnosticMetric, subscribeDebugMode } from './diagnostics';
 
 let current: SavedLyrics | undefined, key = '', request = 0, dirty = 0, lastSignature = '';
+let realtimeBitrate: number | undefined, bitrateTrack = '', bitrateAt = 0, bitratePending = false;
 window.addEventListener('local-lyrics-updated', () => { if (isDebugMode()) dirty++; });
-subscribeDebugMode(() => { if (!isDebugMode()) { request++; key = ''; current = undefined; lastSignature = ''; } });
+subscribeDebugMode(() => {
+  if (!isDebugMode()) {
+    request++; key = ''; current = undefined; lastSignature = '';
+    realtimeBitrate = undefined; bitrateTrack = ''; bitrateAt = 0;
+  }
+});
 const track = () => { const state = store.getState(); return state.library.tracks.find(track => track.id === state.player.currentId); };
+function refreshRealtimeBitrate(audio: HTMLAudioElement, trackId: string) {
+  const backend = (audio as HTMLAudioElement & { backendKind?: string }).backendKind || 'browser';
+  const desktop = window.localMusicDesktop;
+  if (!isDebugMode() || backend !== 'native' || !trackId || !desktop?.nativeAudioBitrate) {
+    realtimeBitrate = undefined; bitrateTrack = trackId; return;
+  }
+  if (bitrateTrack !== trackId) { bitrateTrack = trackId; realtimeBitrate = undefined; bitrateAt = 0; }
+  const now = performance.now();
+  if (bitratePending || now - bitrateAt < 400) return;
+  bitrateAt = now; bitratePending = true;
+  const expected = trackId;
+  void desktop.nativeAudioBitrate().then(value => {
+    const state = store.getState();
+    const currentAudio = getLocalAudioElement() as HTMLAudioElement & { backendKind?: string };
+    if (!isDebugMode() || state.player.currentId !== expected || currentAudio.backendKind !== 'native') return;
+    realtimeBitrate = typeof value === 'number' && Number.isFinite(value) && value > 0 ? value : undefined;
+  }).catch(() => {
+    if (store.getState().player.currentId === expected) realtimeBitrate = undefined;
+  }).finally(() => { bitratePending = false; });
+}
 registerDebugSource('live', () => {
   const state = store.getState(), song = track();
   return { song: song && { id: song.id, name: song.name, artist: song.artist, fileName: song.fileName }, player: { ...state.player, queue: { length: state.player.queue.length, currentIndex: state.player.queue.indexOf(state.player.currentId || '') } } };
 });
 registerDebugSource('audio', () => {
   const audio = getLocalAudioElement(), song = track();
+  refreshRealtimeBitrate(audio, song?.id || '');
   return { file: song && { name: song.fileName, bytes: song.size, unavailable: song.unavailable, ...song.analysisMetadata },
     pipeline: { backend: (audio as HTMLAudioElement & { backendKind?: string }).backendKind || 'browser', currentTime: audio.currentTime, duration: audio.duration, paused: audio.paused,
-      readyState: audio.readyState, networkState: audio.networkState, playbackRate: audio.playbackRate, error: audio.error && { code: audio.error.code, message: audio.error.message } },
+      readyState: audio.readyState, networkState: audio.networkState, playbackRate: audio.playbackRate, realtimeBitrate,
+      error: audio.error && { code: audio.error.code, message: audio.error.message } },
     audioContext: getAudioGraphDiagnostics(), output: getAudioOutputDiagnostics() };
 });
 registerDebugSource('lyrics', () => {
