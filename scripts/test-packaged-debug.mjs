@@ -52,11 +52,11 @@ try {
   await page.getByRole('button', { name: 'Developer tools', exact: true }).click();
   const status = page.getByRole('status').filter({ hasText: 'Developer tools opened.' });
   const failure = page.getByRole('alert');
-  const result = await Promise.race([
+  const devToolsResult = await Promise.race([
     status.waitFor().then(() => 'opened'),
     failure.waitFor().then(async () => `failed: ${await failure.innerText()}`),
   ]);
-  assert.equal(result, 'opened', `Developer tools action failed in the production renderer: ${result}`);
+  assert.equal(devToolsResult, 'opened', `Developer tools action failed in the production renderer: ${devToolsResult}`);
   const devToolsOpen = await application.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows().some(win => win.webContents.getURL().startsWith('localmusic://') && win.webContents.isDevToolsOpened()));
   assert.equal(devToolsOpen, true);
   await application.evaluate(({ BrowserWindow }) => { for (const win of BrowserWindow.getAllWindows()) if (win.webContents.getURL().startsWith('localmusic://')) win.webContents.closeDevTools(); });
