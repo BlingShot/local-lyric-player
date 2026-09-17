@@ -1,9 +1,11 @@
 import { defineConfig } from 'vite';
 import react from '@vitejs/plugin-react';
+import { essentiaWorkerPlugin } from './scripts/essentia-worker-plugin.mjs';
 
 export default defineConfig(({ command }) => ({
   plugins: [
     react(),
+    essentiaWorkerPlugin(),
     {
       name: 'offline-resource-policy',
       transformIndexHtml() {
@@ -22,6 +24,7 @@ export default defineConfig(({ command }) => ({
       },
     },
   ],
+  worker: { plugins: () => [essentiaWorkerPlugin()] },
   server: { host: '127.0.0.1', port: 3000, strictPort: true },
   // Prebundle the worker's parser at startup so first import never triggers an optimizer reload.
   optimizeDeps: { include: ['music-metadata'] },

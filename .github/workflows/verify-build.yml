@@ -69,8 +69,30 @@ jobs:
           node scripts/test-audio-analysis.mjs
       - name: Build Windows portable
         run: npm run desktop:build
+      - name: Packaged diagnostics and local WASM smoke test
+        run: node scripts/test-packaged-debug.mjs
       - name: Check desktop payload budget
         run: npm run desktop:budget
+      - name: Compare portable size against previous main with the same toolchain
+        if: github.ref == 'refs/heads/codex/debug-cache-package-20260917'
+        continue-on-error: true
+        shell: pwsh
+        run: |
+          $baseline = Join-Path $env:RUNNER_TEMP 'lyric-size-baseline'
+          git fetch --depth=1 origin 800ca8015426d96a33ec90edc32b81fc7cde27dd
+          if ($LASTEXITCODE -ne 0) { throw 'Cannot fetch size baseline' }
+          git worktree add --detach $baseline FETCH_HEAD
+          if ($LASTEXITCODE -ne 0) { throw 'Cannot create baseline worktree' }
+          New-Item -ItemType Junction -Path (Join-Path $baseline 'node_modules') -Target (Join-Path $env:GITHUB_WORKSPACE 'node_modules') | Out-Null
+          Push-Location $baseline
+          try {
+            npm run desktop:build
+            if ($LASTEXITCODE -ne 0) { throw 'Baseline portable build failed' }
+          } finally { Pop-Location }
+          $before = Get-ChildItem (Join-Path $baseline 'release/*.exe') | Select-Object -First 1
+          $after = Get-ChildItem 'release/*.exe' | Select-Object -First 1
+          if (!$before -or !$after) { throw 'Portable output missing' }
+          [ordered]@{ baselineCommit='800ca8015426d96a33ec90edc32b81fc7cde27dd'; currentCommit='${{ github.sha }}'; beforeBytes=$before.Length; afterBytes=$after.Length; savedBytes=($before.Length-$after.Length); savedPercent=[math]::Round(100*($before.Length-$after.Length)/$before.Length,4); note='Same Windows runner, Electron and installed dependencies; unsigned portable builds.' } | ConvertTo-Json | Tee-Object -FilePath test-results/portable-size-comparison.json
       - uses: actions/upload-artifact@v4
         with:
           name: Lyric-Player-Windows-x64-${{ github.sha }}
@@ -93,6 +115,11 @@ jobs:
             test-results/lyric-polish/
             test-results/debug-diagnostics/
             test-results/package-size.json
+            test-results/portable-size-comparison.json
+            test-results/packaged-debug/report.json
+            test-results/packaged-debug/failure.json
+            test-results/packaged-debug/debug-report.json
+            test-results/packaged-debug/advanced.png
             test-results/audio-analysis/report.json
           if-no-files-found: ignore
           retention-days: 14
