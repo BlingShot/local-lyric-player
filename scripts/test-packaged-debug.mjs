@@ -69,6 +69,22 @@ try {
   assert.ok(reportText.includes('decode-stage-recorded')); assert.ok(!reportText.includes('PrivateUser'));
   assert.ok(!reportText.includes('fixture-secret-not-real')); assert.ok(report.environment.desktop.processMemory.length > 0);
   checks.push('Real main-process diagnostics, user-path/secret redaction, log-folder IPC and packaged report download pass.');
+  phase = 'native clipboard report copy';
+  await application.evaluate(({ clipboard }) => clipboard.writeText('clipboard-test-sentinel'));
+  await panel.getByRole('button', { name: 'Copy Debug Info', exact: true }).click();
+  const copyDeadline = Date.now() + 20000;
+  let copied = '';
+  do {
+    copied = await application.evaluate(({ clipboard }) => clipboard.readText());
+    if (copied.includes('reportVersion')) break;
+    await new Promise(resolve => setTimeout(resolve, 100));
+  } while (Date.now() < copyDeadline);
+  assert.equal(JSON.parse(copied).reportVersion, 1);
+  assert.ok(copied.includes('decode-stage-recorded')); assert.ok(!copied.includes('PrivateUser'));
+  assert.ok(!copied.includes('fixture-secret-not-real'));
+  await assert.rejects(page.evaluate(() => window.localMusicDesktop.copyDebugInfo('{}')), /Invalid debug report/);
+  assert.equal(await application.evaluate(({ clipboard }) => clipboard.readText()), copied);
+  checks.push('Copy Debug Info writes a redacted report to the real native clipboard; invalid input leaves it unchanged and no read capability is exposed to the renderer.');
   phase = 'clear log files';
   const sentinel = path.join(profile, 'logs', 'keep.txt'); await writeFile(sentinel, 'user data');
   await panel.getByRole('button', { name: 'Clear Logs', exact: true }).click();
@@ -77,6 +93,29 @@ try {
   await panel.locator('.ant-modal-close').click();
   await page.getByRole('checkbox', { name: 'Debug mode', exact: true }).uncheck();
   await page.waitForFunction(async () => (await window.localMusicDesktop.getConfig('diagnostics'))?.debug === false);
+  phase = 'native cache clearing preserves IndexedDB';
+  await page.evaluate(() => new Promise((resolve, reject) => {
+    const request = indexedDB.open('debug-cache-preservation');
+    request.onupgradeneeded = () => request.result.createObjectStore('sentinel');
+    request.onerror = () => reject(request.error);
+    request.onsuccess = () => { const db = request.result, tx = db.transaction('sentinel', 'readwrite');
+      tx.objectStore('sentinel').put('keep-durable-data', 'marker');
+      tx.oncomplete = () => { db.close(); resolve(); }; tx.onabort = () => reject(tx.error); };
+  }));
+  await page.getByRole('button', { name: 'Storage', exact: true }).click();
+  await page.getByRole('button', { name: 'Clear cache', exact: true }).click();
+  await page.getByRole('status').filter({ hasText: 'Cache cleared.' }).waitFor();
+  const durable = await page.evaluate(() => new Promise((resolve, reject) => {
+    const request = indexedDB.open('debug-cache-preservation');
+    request.onerror = () => reject(request.error);
+    request.onsuccess = () => { const db = request.result, tx = db.transaction('sentinel');
+      const marker = tx.objectStore('sentinel').get('marker');
+      tx.oncomplete = () => { db.close(); resolve(marker.result); }; tx.onabort = () => reject(tx.error); };
+  }));
+  assert.equal(durable, 'keep-durable-data');
+  const storage = await page.evaluate(() => window.localMusicDesktop.storageInfo());
+  assert.ok(Number.isFinite(storage.httpCacheBytes) && storage.httpCacheBytes >= 0);
+  checks.push('The real Clear cache settings action completes through Electron and preserves durable IndexedDB data.');
   phase = 'packaged WASM worker through secure local protocol';
   const workerAsset = (await readdir('build/assets')).find(name => /^analysis\.worker-.*\.js$/.test(name));
   assert.ok(workerAsset);

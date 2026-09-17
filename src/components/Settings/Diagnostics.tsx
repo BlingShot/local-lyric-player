@@ -25,7 +25,7 @@ export function DiagnosticsSettings() {
   const desktop = window.localMusicDesktop;
   const run = async (action: () => Promise<unknown>, success = '') => { setBusy(true); setFailure(''); setNotice(''); try { await action(); setNotice(success); } catch (error) { setFailure((error as Error).message); } finally { setBusy(false); } };
   const actions = <div className='settings-folder-actions'>
-    <button disabled={busy} onClick={() => void run(async () => { await navigator.clipboard.writeText(await debugReport()); }, 'Debug info copied.')}>{t('Copy Debug Info')}</button>
+    <button disabled={busy} onClick={() => void run(async () => { const report = await debugReport(); if (desktop?.copyDebugInfo) await desktop.copyDebugInfo(report); else await navigator.clipboard.writeText(report); }, 'Debug info copied.')}>{t('Copy Debug Info')}</button>
     <button disabled={busy} onClick={() => void run(async () => save(await debugReport(), 'json'))}>{t('Export Debug Report')}</button>
     {desktop?.openLogFolder && <button disabled={busy} onClick={() => void run(desktop.openLogFolder)}>{t('Open Log Folder')}</button>}
     <button disabled={busy} onClick={() => void run(clearDiagnostics, 'Logs cleared.')}>{t('Clear Logs')}</button>

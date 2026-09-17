@@ -32,6 +32,7 @@ declare global {
       writeLog(entry: { level: 'debug' | 'info' | 'warn' | 'error'; scope: string; message: string; data?: unknown }): Promise<void>;
       readLog(): Promise<string>;
       clearLogs(): Promise<void>;
+      copyDebugInfo?(report: string): Promise<void>;
       debugInfo(): Promise<unknown>;
       logPath(): Promise<string>;
       openLogFolder(): Promise<void>;

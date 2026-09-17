@@ -1,5 +1,6 @@
 import { registerNativeAudio } from './native-audio-ipc.mjs';
-import { shell, app } from 'electron';
+import { shell, app, clipboard } from 'electron';
+import { prepareClipboardReport } from './debug-clipboard.mjs';
 import { mkdir } from 'node:fs/promises';
 import { redactDiagnostic } from './log-redaction.mjs';
 import { SpotifyService } from './spotify.mjs';
@@ -31,6 +32,7 @@ export function registerSettingsIpc(win, config, folders, devUrl, logger) {
   handle('desktop-config:get', key => { if (!allowed.has(key)) throw new Error('Unknown setting.'); return config.get(key); });
   handle('desktop-config:set', async (key, value) => { if (!allowed.has(key)) throw new Error('Unknown setting.'); if (key === 'diagnostics') { if (!value || typeof value.debug !== 'boolean' || Object.keys(value).some(key => key !== 'debug')) throw new Error('Invalid debug settings.'); logger?.setDebug(value.debug); } await config.set(key, value); });
   handle('desktop-log:write', entry => logger?.write(entry));
+  handle('desktop-log:copy-report', text => clipboard.writeText(prepareClipboardReport(text)));
   handle('desktop-log:read', () => logger?.read() ?? '');
   handle('desktop-log:clear', () => logger?.clear());
   handle('desktop-log:info', async () => redactDiagnostic({ version: app.getVersion(), versions: process.versions, platform: process.platform, arch: process.arch,
