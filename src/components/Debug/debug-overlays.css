@@ -1,6 +1,6 @@
 .debug-overlay {
   --debug-muted: rgb(255 255 255 / 54%);
-  position: fixed; z-index: 850; pointer-events: none; box-sizing: border-box;
+  position: relative; z-index: 2; pointer-events: none; box-sizing: border-box;
   color: rgb(255 255 255 / 78%);
   font-family: var(--app-font-family, system-ui, sans-serif);
   font-size: 12px; line-height: 1.42; font-weight: 600;
@@ -14,13 +14,20 @@
 .debug-readout-value { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .debug-readout-wide { display: flex; width: 100%; }
 
-/* Global and audio telemetry sit in the unused top-center band instead of floating cards. */
-.debug-overlay-global { top: 12px; left: 50%; width: min(760px, calc(100vw - 420px)); transform: translateX(-50%); }
-.offline-playing-bar { position: relative; }
-.offline-playing-bar .debug-overlay-audio {
-  position: fixed; top: 48px; left: 50%; bottom: auto; width: min(980px, calc(100vw - 360px)); transform: translateX(-50%); z-index: 850;
+/* Debug telemetry belongs to the lyrics surface itself. The band reserves layout
+   space so fullscreen/immersive mode cannot hide it with the player chrome and
+   the two top readouts never sit on top of each other. */
+.lyrics-debug-band {
+  flex: 0 0 auto; min-height: 0; display: flex; flex-direction: column; align-items: center; gap: 2px;
+  padding: 0 32px 8px; pointer-events: none;
 }
-/* Lyric-specific telemetry is printed directly into the right side of the lyric canvas. */
+.lyrics-debug-band:empty { display: none; }
+.lyrics-debug-band .debug-overlay-global,
+.lyrics-debug-band .debug-overlay-audio { width: min(100%, 1180px); }
+.lyrics-debug-band .debug-overlay-global { order: 0; }
+.lyrics-debug-band .debug-overlay-audio { order: 1; }
+
+/* Lyric-specific telemetry stays on the lyric canvas, separate from the top band. */
 .lyrics-reader > .debug-overlay-lyrics {
   position: absolute; top: 62%; right: 24px; width: min(330px, 30vw); transform: translateY(-50%); z-index: 30;
   display: flex; flex-direction: column; gap: 2px;
@@ -35,13 +42,13 @@
 [data-theme=light] .debug-readout-secondary { color: rgb(0 0 0 / 54%); }
 
 @media (max-width: 1100px) {
-  .debug-overlay-global { width: min(620px, calc(100vw - 300px)); }
-  .offline-playing-bar .debug-overlay-audio { width: min(760px, calc(100vw - 220px)); }
+  .lyrics-debug-band { padding-inline: 20px; }
   .lyrics-reader > .debug-overlay-lyrics { right: 14px; width: min(280px, 34vw); }
 }
 @media (max-width: 760px) {
-  .debug-overlay-global { top: 8px; width: calc(100vw - 24px); }
-  .offline-playing-bar .debug-overlay-audio { top: 38px; width: calc(100vw - 24px); }
+  .lyrics-debug-band { padding: 0 12px 6px; }
+  .debug-overlay { font-size: 12px; }
+  .debug-readout-row { gap-inline: 10px; }
   .debug-readout-secondary { display: none; }
   .lyrics-reader > .debug-overlay-lyrics { top: auto; right: 10px; bottom: 18px; width: min(270px, calc(100% - 20px)); transform: none; }
 }
