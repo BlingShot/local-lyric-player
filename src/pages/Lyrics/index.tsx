@@ -3,6 +3,7 @@ import { trackCover } from '../../library/importFiles';
 import { LyricRemoteNotice } from '../../components/Lyrics/LyricRemoteNotice';
 import { LyricDisplayControls } from '../../components/Lyrics/LyricDisplayControls';
 import { LyricTools } from '../../components/Lyrics/LyricTools';
+import { AudioDebugOverlay, GlobalDebugOverlay } from '../../components/Debug/DebugOverlays';
 import { t } from '../../i18n';
 import { useEffect, useState, type CSSProperties } from 'react';
 import { Link } from 'react-router-dom';
@@ -59,6 +60,7 @@ export function LyricsPage() {
         <button className='offline-icon-button lyrics-fullscreen-settings' aria-label={t("Settings")} title={t("Settings")} onClick={() => dispatch(uiActions.setSettingsOpen(true))}>⚙</button>
         <LyricsTiming offsetMs={timing.offsetMs} onChange={value => void timing.update(value)} disabled={!saved} /><FullscreenButton /></div>
     </header>
+    <div className='lyrics-debug-band'><GlobalDebugOverlay /><AudioDebugOverlay /></div>
     {dropError && <p className='lyrics-page-notice' role='alert'>{dropError}</p>}
     {timing.error && <p className='lyrics-page-notice' role='alert'>{t(timing.error)}<button onClick={() => void timing.update(timing.offsetMs)}>{t("Retry save")}</button></p>}
     <div className='lyrics-content'>
