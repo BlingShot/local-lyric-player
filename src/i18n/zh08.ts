@@ -32,8 +32,8 @@ export const zh08: Record<string, string> = {
 
 Object.assign(zh08, {
   'Align lyrics by performer': '按演唱者左右对齐', 'Show performer labels': '显示演唱者标签',
-  'Weight': '字重', 'Width': '字宽', 'Application font weight': '应用字体字重', 'Lyric font weight': '歌词字体字重',
-  'Application font width': '应用字体字宽', 'Lyric font width': '歌词字体字宽', 'Application letter spacing': '应用字间距', 'Lyric letter spacing': '歌词字间距',
+  'Weight': '字重', 'Width': '宽度', 'Application font weight': '应用字体字重', 'Lyric font weight': '歌词字体字重',
+  'Application font width': '应用字体宽度', 'Lyric font width': '歌词字体宽度', 'Application letter spacing': '应用字间距', 'Lyric letter spacing': '歌词字间距',
   'Variable axes require a supporting font. Other fonts use available faces or browser synthesis.': '可变字体轴需要字体支持，其他字体使用已有字形或浏览器合成效果。',
   'Make it yours': '你的个性设置', 'Interface': '界面', 'Every voice, every word': '每个声部，每个字词',
   'Your sound': '你的声音', 'Optional connections': '可选连接', 'On this device': '保存在此设备', 'Day': '日间',
@@ -56,6 +56,8 @@ Object.assign(zh08, {
   'Previous drafts': '之前的草稿',
   'Current player lyrics opened. Your previous draft is available in Project → Previous drafts.': '已打开当前播放使用的歌词。旧草稿保存在“项目 → 之前的草稿”。',
   'Diagnostics': '诊断', 'Debug mode': '调试模式', 'Export log': '导出日志', 'Open log folder': '打开日志文件夹', 'Developer tools': '开发者工具',
+  'Debug data is shown directly on the app, player, and lyric surfaces. Logs stay on this device and sensitive values are redacted.': '调试数据会直接显示在应用、播放器和歌词界面的对应位置。日志仅保存在本机，敏感信息会自动脱敏。',
+  'Developer tools opened.': '开发者工具已打开。',
   'Logs stay on this device. API credentials and lyric request bodies are not recorded.': '日志仅保存在本机，不记录 API 凭据和歌词请求正文。',
   'Debug setting could not be saved.': '调试设置未能保存。',
   'Log file could not be written. Session logs are still available.': '日志文件未能写入，仍可导出本次会话日志。',
