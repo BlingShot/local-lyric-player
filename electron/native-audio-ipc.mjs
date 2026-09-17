@@ -32,6 +32,18 @@ export function registerNativeAudio(win, _config, handle, logger) {
   handle('native-audio:devices', () => sweep.then(() => audio.devices()));
   handle('native-audio:meter', enabled => audio.setMeter(enabled));
   handle('native-audio:energy', () => audio.energy());
+  handle('native-audio:bitrate', async () => {
+    try {
+      await audio.start();
+      const value = Number(await audio.request(['get_property', 'audio-bitrate']));
+      return Number.isFinite(value) && value > 0 ? value : null;
+    } catch (error) {
+      // No loaded stream (or a decoder transition) makes mpv report the
+      // property as unavailable. Debug telemetry must never become a playback fault.
+      if (/property unavailable/i.test(String(error?.message || error || ''))) return null;
+      throw error;
+    }
+  });
   handle('native-audio:load', value => audioResult(() => { if (!value?.context) throw new Error('Missing native load context.'); return audio.load(value); }));
   handle('native-audio:command', (command, value, context) => audioResult(() => { if (!context) throw new Error('Missing native command context.'); return audio.command(command, value, context); }));
   win.webContents.on('did-start-navigation', (_event, _url, inPlace, mainFrame) => { if (mainFrame && !inPlace) { audio.resetCommands(); void audio.command('stop').then(() => audio.setMeter(false)).catch(() => {}); } });
