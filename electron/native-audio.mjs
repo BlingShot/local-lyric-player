@@ -7,6 +7,7 @@ import { randomUUID } from 'node:crypto';
 import { AudioTempFiles } from './audio-temp-files.mjs';
 const delay = ms => new Promise(resolve => setTimeout(resolve, ms));
 const finite = (value, min, max) => typeof value === 'number' && Number.isFinite(value) && value >= min && value <= max;
+const propertyUnavailable = error => /property unavailable/i.test(String(error?.message || error || ''));
 
 // Only local bytes and a small command whitelist cross the renderer boundary.
 export class NativeAudio extends EventEmitter {
@@ -128,13 +129,26 @@ export class NativeAudio extends EventEmitter {
         });
         current();
         mark('OutputVerification');
-        const duration = await this.request(['get_property', 'duration']);
-        const output = await this.request(['get_property', 'current-ao']);
+        let duration = this.state.duration || 0, output;
+        try {
+          const value = await this.request(['get_property', 'duration']);
+          const parsed = Number(value); if (Number.isFinite(parsed) && parsed >= 0) duration = parsed;
+        } catch (error) {
+          if (!propertyUnavailable(error)) throw error;
+          this.debugEvent('debug', 'PropertyDeferred', { id: value.id, property: 'duration' });
+        }
+        try { output = await this.request(['get_property', 'current-ao']); }
+        catch (error) {
+          if (!propertyUnavailable(error)) throw error;
+          // mpv may not expose current-ao until the paused file actually starts.
+          // file-loaded already proved that the audio itself decoded successfully.
+          this.debugEvent('debug', 'PropertyDeferred', { id: value.id, property: 'current-ao' });
+        }
         current();
-        if (output !== 'wasapi') throw new PlaybackFault('device-unavailable', 'WASAPI output did not start. Check the selected device; no shared-mode fallback was applied.');
-        this.update({ duration: Number(duration) || 0, ready: true, paused: true });
+        if (output !== undefined && output !== 'wasapi') throw new PlaybackFault('device-unavailable', 'WASAPI output did not start. Check the selected device; no shared-mode fallback was applied.');
+        this.update({ duration, ready: true, paused: true });
         mark('CacheCleanup'); await this.temp.cleanup(file);
-        this.debugEvent('info', 'LoadCompleted', { id: value.id, duration, output, elapsedMs: Math.round(performance.now() - started) });
+        this.debugEvent('info', 'LoadCompleted', { id: value.id, duration, output: output ?? 'pending', elapsedMs: Math.round(performance.now() - started) });
       } catch (error) {
         // Delete only after the helper acknowledges release. If stop fails, retain
         // ownership until the next successful stop or process shutdown.
