@@ -40,7 +40,18 @@ export function registerSettingsIpc(win, config, folders, devUrl, logger) {
     httpCacheBytes: await win.webContents.session.getCacheSize(), logs: await logger?.info() }));
   handle('desktop-log:path', () => logger?.file ?? '');
   handle('desktop-log:open', async () => { if (!logger) return; await logger.queue; await mkdir(logger.directory, { recursive: true }); const error = await shell.openPath(logger.directory); if (error) throw new Error(error); });
-  handle('desktop-log:devtools', () => { if (!logger?.debug) throw new Error('Enable debug mode first.'); win.webContents.openDevTools({ mode: 'detach' }); });
+  handle('desktop-log:devtools', () => {
+    const contents = win.webContents;
+    if (contents.isDestroyed()) throw new Error('The application window is no longer available.');
+    if (contents.isDevToolsOpened()) { contents.focusDevTools(); return true; }
+    return new Promise((resolve, reject) => {
+      const timeout = setTimeout(() => { contents.removeListener('devtools-opened', opened); reject(new Error('Developer tools did not open.')); }, 5000);
+      const opened = () => { clearTimeout(timeout); contents.focusDevTools(); resolve(true); };
+      contents.once('devtools-opened', opened);
+      try { contents.openDevTools({ mode: 'detach', activate: true }); }
+      catch (error) { clearTimeout(timeout); contents.removeListener('devtools-opened', opened); reject(error); }
+    });
+  });
   handle('desktop-config:path', () => config.file);
   handle('desktop-folder:info', () => folders.info());
   let choosing = false;

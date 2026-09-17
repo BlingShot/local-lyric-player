@@ -1,0 +1,17 @@
+/* Keep the normal lyrics page close to the wide reading area used by the design reference.
+   The older v0.8 rule spends too much of the center panel on horizontal padding, which
+   makes duet lanes and long single lines wrap prematurely. */
+.offline-app:not([data-lyrics-fullscreen]) .lyrics-page .lyrics-lines {
+  box-sizing: border-box;
+  width: min(100%, 1180px) !important;
+  padding-inline: clamp(28px, 4cqi, 56px) !important;
+}
+.offline-app:not([data-lyrics-fullscreen]) .lyrics-page .lyrics-reader {
+  --duet-gap: clamp(20px, 2.8cqi, 48px);
+}
+@container (max-width: 600px) {
+  .offline-app:not([data-lyrics-fullscreen]) .lyrics-page .lyrics-lines {
+    width: 100% !important;
+    padding-inline: 20px !important;
+  }
+}

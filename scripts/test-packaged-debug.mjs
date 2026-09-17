@@ -23,6 +23,7 @@ try {
   await page.getByRole('button', { name: 'Settings', exact: true }).click();
   await page.getByRole('button', { name: 'Advanced', exact: true }).click();
   assert.equal(await page.getByRole('checkbox', { name: 'Debug mode', exact: true }).isChecked(), false);
+  assert.equal(await page.getByRole('button', { name: 'Developer tools', exact: true }).isDisabled(), true);
   phase = 'real normal-mode log IPC';
   await page.evaluate(async () => {
     await window.localMusicDesktop.writeLog({ level: 'debug', scope: 'test', message: 'normal-mode-noise' });
@@ -30,11 +31,13 @@ try {
   });
   let logs = await page.evaluate(() => window.localMusicDesktop.readLog());
   assert.ok(logs.includes('normal-mode-info')); assert.ok(!logs.includes('normal-mode-noise'));
-  await assert.rejects(page.evaluate(() => window.localMusicDesktop.openDebugTools()), /Enable debug mode/);
-  checks.push('Packaged preload/main IPC filters DEBUG by default and gates developer tools.');
+  assert.equal(await page.locator('.debug-overlay').count(), 0);
+  checks.push('Packaged preload/main IPC filters DEBUG by default; developer tools and inline HUD remain disabled in normal mode.');
   phase = 'real debug-mode persistence and redaction';
   await page.getByRole('checkbox', { name: 'Debug mode', exact: true }).check();
   await page.waitForFunction(async () => (await window.localMusicDesktop.getConfig('diagnostics'))?.debug === true);
+  await page.locator('.debug-overlay-global').waitFor(); await page.locator('.debug-overlay-audio').waitFor();
+  assert.ok((await page.locator('.debug-overlay-global').innerText()).includes('FPS'));
   await page.evaluate(async () => {
     await window.localMusicDesktop.writeLog({ level: 'debug', scope: 'audio.test', message: 'decode-stage-recorded',
       data: { path: 'C:\\Users\\PrivateUser\\Music\\test.flac', apiKey: 'fixture-secret-not-real', error: { stack: 'Decode at C:\\Users\\PrivateUser\\Music\\test.flac' } } });
@@ -42,17 +45,20 @@ try {
   logs = await page.evaluate(() => window.localMusicDesktop.readLog());
   assert.ok(logs.includes('decode-stage-recorded')); assert.ok(logs.includes('test.flac'));
   assert.ok(!logs.includes('PrivateUser')); assert.ok(!logs.includes('fixture-secret-not-real'));
-  await page.getByRole('button', { name: 'Debug Panel', exact: true }).click();
-  const panel = page.locator('.debug-modal');
-  await panel.getByRole('button', { name: 'Performance', exact: true }).click();
-  await page.waitForFunction(() => document.querySelector('.debug-modal pre')?.textContent.includes('workingSetBytes'));
+  phase = 'developer tools button';
+  await page.getByRole('button', { name: 'Developer tools', exact: true }).click();
+  await page.getByRole('status').filter({ hasText: 'Developer tools opened.' }).waitFor();
+  const devToolsOpen = await application.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows().some(win => win.webContents.getURL().startsWith('localmusic://') && win.webContents.isDevToolsOpened()));
+  assert.equal(devToolsOpen, true);
+  await application.evaluate(({ BrowserWindow }) => { for (const win of BrowserWindow.getAllWindows()) if (win.webContents.getURL().startsWith('localmusic://')) win.webContents.closeDevTools(); });
+  checks.push('The Settings developer-tools button opens and focuses real detached DevTools in the packaged app.');
   phase = 'native folder and report export';
   await application.evaluate(({ shell }) => { globalThis.openedLogFolder = ''; shell.openPath = async folder => { globalThis.openedLogFolder = folder; return ''; }; });
-  await panel.getByRole('button', { name: 'Open Log Folder', exact: true }).click();
+  await page.getByRole('button', { name: 'Open Log Folder', exact: true }).click();
   assert.equal(await application.evaluate(() => globalThis.openedLogFolder), path.join(profile, 'logs'));
   // Electron's app-owned will-download handler saves directly; unlike a browser
   // context it does not promise Playwright's page 'download' notification.
-  await panel.getByRole('button', { name: 'Export Debug Report', exact: true }).click();
+  await page.getByRole('button', { name: 'Export Debug Report', exact: true }).click();
   const deadline = Date.now() + 20000;
   let nativeDownloads = [];
   do {
@@ -68,10 +74,10 @@ try {
   assert.equal(report.environment.version, '0.8.3'); assert.equal(report.debugMode, true);
   assert.ok(reportText.includes('decode-stage-recorded')); assert.ok(!reportText.includes('PrivateUser'));
   assert.ok(!reportText.includes('fixture-secret-not-real')); assert.ok(report.environment.desktop.processMemory.length > 0);
-  checks.push('Real main-process diagnostics, user-path/secret redaction, log-folder IPC and packaged report download pass.');
+  checks.push('Real inline diagnostics, user-path/secret redaction, log-folder IPC and packaged report download pass.');
   phase = 'native clipboard report copy';
   await application.evaluate(({ clipboard }) => clipboard.writeText('clipboard-test-sentinel'));
-  await panel.getByRole('button', { name: 'Copy Debug Info', exact: true }).click();
+  await page.getByRole('button', { name: 'Copy Debug Info', exact: true }).click();
   const copyDeadline = Date.now() + 20000;
   let copied = '';
   do {
@@ -87,12 +93,12 @@ try {
   checks.push('Copy Debug Info writes a redacted report to the real native clipboard; invalid input leaves it unchanged and no read capability is exposed to the renderer.');
   phase = 'clear log files';
   const sentinel = path.join(profile, 'logs', 'keep.txt'); await writeFile(sentinel, 'user data');
-  await panel.getByRole('button', { name: 'Clear Logs', exact: true }).click();
+  await page.getByRole('button', { name: 'Clear Logs', exact: true }).click();
   await page.waitForFunction(async () => !(await window.localMusicDesktop.readLog()).includes('decode-stage-recorded'));
   assert.equal(await readFile(sentinel, 'utf8'), 'user data');
-  await panel.locator('.ant-modal-close').click();
   await page.getByRole('checkbox', { name: 'Debug mode', exact: true }).uncheck();
   await page.waitForFunction(async () => (await window.localMusicDesktop.getConfig('diagnostics'))?.debug === false);
+  assert.equal(await page.locator('.debug-overlay').count(), 0);
   phase = 'native cache clearing preserves IndexedDB';
   await page.evaluate(() => new Promise((resolve, reject) => {
     const request = indexedDB.open('debug-cache-preservation');

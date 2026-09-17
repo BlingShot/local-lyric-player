@@ -1,3 +1,4 @@
+import '../../styles/lyrics-display-area.css';
 import { trackCover } from '../../library/importFiles';
 import { LyricRemoteNotice } from '../../components/Lyrics/LyricRemoteNotice';
 import { LyricDisplayControls } from '../../components/Lyrics/LyricDisplayControls';

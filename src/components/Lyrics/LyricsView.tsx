@@ -3,6 +3,7 @@ import { vocalLayout, activeVocalLayout, vocalScenes, vocalSceneRows } from '../
 import { wordVisualProgress, rapidWord } from '../../lyrics/wordVisual';
 import { sustainedGlow } from '../../lyrics/sustained';
 import { Interlude } from './Interlude';
+import { LyricsDebugOverlay } from '../Debug/DebugOverlays';
 import './lyric-tools.css';
 import { t, useLanguage } from '../../i18n';
 import { Fragment, memo, useCallback, useLayoutEffect, useMemo, useRef, type CSSProperties } from 'react';
@@ -100,6 +101,7 @@ export function LyricsView({ document, trackId, offsetMs = 0, fontKey = '', visi
         })}
       </ol>
     </div>
+    <LyricsDebugOverlay />
     {!following && <button className='lyrics-resume' onClick={resume}>{t("Resume following")}</button>}
   </div>;
 }
