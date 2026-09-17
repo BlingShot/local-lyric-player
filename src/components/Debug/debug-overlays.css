@@ -19,7 +19,7 @@
 .lyrics-reader > .debug-overlay-lyrics { top: 12px; right: 12px; }
 .offline-playing-bar { position: relative; }
 .offline-playing-bar .debug-overlay-audio { left: 50%; bottom: calc(100% + 8px); transform: translateX(-50%); width: min(420px, calc(100vw - 40px)); }
-.debug-overlay-global { position: fixed; top: 66px; right: 18px; width: 250px; z-index: 1200; }
+.debug-overlay-global { position: fixed; top: 66px; right: 18px; width: 250px; z-index: 850; }
 .offline-app[data-lyrics-fullscreen] .debug-overlay-global { top: 88px; }
 [data-theme=light] .debug-overlay { --debug-surface: rgb(247 249 250 / 88%); --debug-border: rgb(0 0 0 / 14%); --debug-muted: rgb(0 0 0 / 56%); color: #14171a; box-shadow: 0 8px 28px rgb(20 30 40 / 14%); }
 [data-theme=light] .debug-overlay header span { color: #08783e; }
