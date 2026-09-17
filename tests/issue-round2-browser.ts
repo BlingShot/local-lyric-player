@@ -11,6 +11,13 @@ import { LocalAudioPlayer } from '../src/player/LocalAudioPlayer';
 export { deleteTrack, saveLyricOffset, readStudioDraft };
 const check = (condition: unknown, message: string) => { if (!condition) throw new Error(message); };
 const tick = () => new Promise(resolve => setTimeout(resolve, 0));
+const waitFor = async (condition: () => boolean, message: string, timeoutMs = 1500) => {
+  const deadline = performance.now() + timeoutMs;
+  while (!condition()) {
+    if (performance.now() >= deadline) throw new Error(message);
+    await new Promise(resolve => setTimeout(resolve, 10));
+  }
+};
 const deferred = () => { let resolve!: () => void; const promise = new Promise<void>(r => { resolve = r; }); return { promise, resolve }; };
 const get = <T>(request: IDBRequest<T>) => new Promise<T>((resolve, reject) => { request.onsuccess = () => resolve(request.result); request.onerror = () => reject(request.error); });
 export async function seedTrack(id: string, source = '[00:01]Original\n[00:04]End') {
@@ -153,8 +160,9 @@ export async function bridgeDeviceFaults() {
     player.play('a'); await tick(); await tick();
     state.time = 28; send({ ...state }); state.error = { kind: 'device-unavailable', message: 'Output was lost.' }; send({ ...state });
     check(player.getState().currentId === 'a' && player.getState().position >= 28 && audio.paused && !failures.length, 'Device error skipped a healthy song');
-    loadFailure = true; player.play(); await tick(); await tick();
-    check(player.getState().error?.kind === 'device-exclusive-busy' && player.getState().currentId === 'a' && !failures.length, 'IPC envelope lost structured device error');
+    loadFailure = true; player.play();
+    await waitFor(() => player.getState().error?.kind === 'device-exclusive-busy', 'Timed out waiting for structured device fault');
+    check(player.getState().currentId === 'a' && !failures.length, 'IPC envelope lost structured device error');
     return { retainedSong: 'a', errorKind: player.getState().error?.kind, failures };
   } finally { player.dispose(); dispose(); delete window.localMusicDesktop; }
 }
