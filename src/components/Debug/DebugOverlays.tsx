@@ -1,3 +1,4 @@
+import type { ReactNode } from 'react';
 import { recentDiagnosticLogs, useDebugSnapshot, useDiagnostics } from '../../desktop/diagnostics';
 import './debug-overlays.css';
 
@@ -33,7 +34,7 @@ function compactRecord(value: unknown) {
 function DebugValue({ label, value, wide = false }: { label: string; value: string; wide?: boolean }) {
   return <><dt>{label}</dt><dd className={wide ? 'debug-overlay-wide' : undefined} title={value}>{value}</dd></>;
 }
-function DebugCard({ title, className, children }: { title: string; className: string; children: React.ReactNode }) {
+function DebugCard({ title, className, children }: { title: string; className: string; children: ReactNode }) {
   return <aside className={`debug-overlay ${className}`} aria-label={`${title} debug overlay`}>
     <header><strong>{title}</strong><span>LIVE</span></header><dl>{children}</dl>
   </aside>;
@@ -47,7 +48,7 @@ export function LyricsDebugOverlay() {
   const rendered = record(list(lyrics.rendered)[0]);
   const currentWords = list(current.currentWords).map(item => record(item));
   const words = currentWords.length ? currentWords.slice(0, 6).map(word => text(word.text, `#${text(word.index)}`)).join(' ') : '—';
-  const ttml = record(snapshot.sections.ttml), steps = list(ttml.steps), latestStep = record(steps.at(-1));
+  const ttml = record(snapshot.sections.ttml), steps = list(ttml.steps), latestStep = record(steps[steps.length - 1]);
   const lineRange = current.id ? `${text(current.id)} · ${seconds(current.start)}–${seconds(current.end)}` : '—';
   const api = latestStep.stage ? `${text(latestStep.stage)}${latestStep.status ? ` · ${text(latestStep.status)}` : ''}` : compactRecord(ttml);
   const follow = rendered.following ? `${text(rendered.following)} · scroll ${Math.round(number(rendered.scrollTop) || 0)}px` : '—';
