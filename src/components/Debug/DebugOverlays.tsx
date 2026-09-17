@@ -49,8 +49,11 @@ export function LyricsDebugOverlay() {
   const currentWords = list(current.currentWords).map(item => record(item));
   const words = currentWords.length ? currentWords.slice(0, 6).map(word => text(word.text, `#${text(word.index)}`)).join(' ') : '—';
   const ttml = record(snapshot.sections.ttml), steps = list(ttml.steps), latestStep = record(steps[steps.length - 1]);
+  const latestLyricTrace = recentDiagnosticLogs().filter(entry => /amll|ttml|lyrics?\.(?:remote|resolver|fetch|api)/i.test(entry.scope)).slice(-1)[0];
   const lineRange = current.id ? `${text(current.id)} · ${seconds(current.start)}–${seconds(current.end)}` : '—';
-  const api = latestStep.stage ? `${text(latestStep.stage)}${latestStep.status ? ` · ${text(latestStep.status)}` : ''}` : compactRecord(ttml);
+  const api = latestStep.stage
+    ? `${text(latestStep.stage)}${latestStep.status ? ` · ${text(latestStep.status)}` : ''}`
+    : latestLyricTrace ? `${latestLyricTrace.scope} · ${latestLyricTrace.message}` : compactRecord(ttml);
   const follow = rendered.following ? `${text(rendered.following)} · scroll ${Math.round(number(rendered.scrollTop) || 0)}px` : '—';
   return <DebugCard title='LYRICS' className='debug-overlay-lyrics'>
     <DebugValue label='Source' value={`${text(lyrics.source)} · ${text(lyrics.format)}`} />
