@@ -21,6 +21,12 @@ function bytes(value: unknown) {
   if (n >= 1024) return `${(n / 1024).toFixed(1)} KB`;
   return `${Math.round(n)} B`;
 }
+function percentage(used: unknown, total: unknown) {
+  const current = number(used), limit = number(total);
+  if (current === undefined || limit === undefined || limit <= 0) return '—';
+  const value = current / limit * 100;
+  return `${value < 10 ? value.toFixed(1) : value.toFixed(0)}%`;
+}
 function shorten(value: unknown, max = 72) {
   const source = text(value);
   return source.length > max ? `${source.slice(0, max - 1)}…` : source;
@@ -32,7 +38,7 @@ function compactRecord(value: unknown) {
 function bitrate(value: unknown) {
   const n = number(value);
   if (n === undefined || n <= 0) return '—';
-  return `${Math.round(n > 10000 ? n / 1000 : n)} kbps`;
+  return `${Math.round(n / 1000)} kbps`;
 }
 
 function DebugField({ label, value, wide = false }: { label: string; value: string; wide?: boolean }) {
@@ -71,17 +77,16 @@ export function AudioDebugOverlay() {
   const { debug } = useDiagnostics();
   const snapshot = useDebugSnapshot();
   if (!debug) return null;
-  const audio = record(snapshot.sections.audio), file = record(audio.file), pipeline = record(audio.pipeline), output = record(audio.output), context = record(audio.audioContext);
+  const audio = record(snapshot.sections.audio), pipeline = record(audio.pipeline), output = record(audio.output), context = record(audio.audioContext);
   const state = `${pipeline.paused === true ? 'paused' : 'playing'} · ready ${text(pipeline.readyState)} · net ${text(pipeline.networkState)}`;
   const outputName = text(output.deviceLabel, text(output.device));
   const contextState = text(context.state, text(context.contextState, compactRecord(context)));
-  const bitRate = file.bitrate ?? file.bitRate ?? file.audioBitrate;
   return <aside className='debug-overlay debug-overlay-audio' aria-label='Audio debug readout'>
     <div className='debug-readout-row'>
       <DebugField label='Audio Clock' value={`${seconds(pipeline.currentTime)} / ${seconds(pipeline.duration)}`} />
       <DebugField label='State' value={state} />
       <DebugField label='Output' value={`${outputName}${output.exclusive === true ? ' · exclusive' : ''}`} />
-      <DebugField label='Bitrate' value={bitrate(bitRate)} />
+      <DebugField label='Live bitrate' value={bitrate(pipeline.realtimeBitrate)} />
     </div>
     <div className='debug-readout-row debug-readout-secondary'>
       <DebugField label='Backend' value={text(pipeline.backend)} />
@@ -99,13 +104,12 @@ export function GlobalDebugOverlay() {
   const desktop = record(snapshot.desktop), desktopLogs = list(record(desktop.logs).recent).map(record);
   const logs = [...recentDiagnosticLogs(), ...desktopLogs];
   const warnings = logs.filter(entry => entry.level === 'warn').length, errors = logs.filter(entry => entry.level === 'error').length;
+  const memory = `${bytes(heap.usedBytes)} · ${percentage(heap.usedBytes, heap.limitBytes)} heap`;
   return <aside className='debug-overlay debug-overlay-global' aria-label='Global debug readout'>
     <div className='debug-readout-row'>
+      <DebugField label='Memory' value={memory} />
       <DebugField label='FPS' value={text(metrics.fps)} />
-      <DebugField label='Heap' value={bytes(heap.usedBytes)} />
       <DebugField label='Warn/Error' value={`${warnings} / ${errors}`} />
-    </div>
-    <div className='debug-readout-row debug-readout-secondary'>
       <DebugField label='Switch' value={metrics.songSwitchMs === undefined ? '—' : `${text(metrics.songSwitchMs)}ms`} />
       <DebugField label='Logs' value={`${bytes(snapshot.retainedBytes)} · dropped ${snapshot.dropped}`} />
     </div>
