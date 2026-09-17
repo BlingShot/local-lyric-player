@@ -3,7 +3,6 @@ import { useRef } from 'react';
 import { shallowEqual } from 'react-redux';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { Pause, Play, SkipBack, SkipNext, VolumeIcon, DetailsIcon, ListIcon, MicrophoneIcon } from '../../../Icons';
-import { AudioDebugOverlay } from '../../../Debug/DebugOverlays';
 import { useAppDispatch, useAppSelector } from '../../../../store/store';
 import { uiActions } from '../../../../store/slices/offlineUi';
 import { getLocalPlayer } from '../../../../player/runtime';
@@ -35,7 +34,6 @@ export default function PlayingBar() {
         <button aria-label={t("Dismiss playback error")} onClick={() => getLocalPlayer().dismissError()}>×</button>
       </div>}
       <footer className='offline-playing-bar' aria-label={t("Player")} inert={lyricsImmersive || undefined} aria-hidden={lyricsImmersive || undefined}>
-        <AudioDebugOverlay />
         <div className='offline-song-details'>
           <img className='album-cover' src={trackCover(track)} alt='' width={56} height={56} />
           <div><p className='song-title'>{track?.name ?? t("No track selected")}</p>
