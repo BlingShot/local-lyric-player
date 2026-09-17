@@ -121,5 +121,7 @@ jobs:
             test-results/packaged-debug/debug-report.json
             test-results/packaged-debug/advanced.png
             test-results/audio-analysis/report.json
+            test-results/audio-analysis/failure.json
+            test-results/audio-analysis/failure.png
           if-no-files-found: ignore
           retention-days: 14
