@@ -1,6 +1,6 @@
 import { _electron as electron } from 'playwright';
 import assert from 'node:assert/strict';
-import { mkdir, mkdtemp, readFile, writeFile, readdir, stat } from 'node:fs/promises';
+import { mkdir, mkdtemp, readFile, writeFile, readdir, stat, copyFile } from 'node:fs/promises';
 import path from 'node:path';
 import { pathToFileURL } from 'node:url';
 
@@ -50,9 +50,20 @@ try {
   await application.evaluate(({ shell }) => { globalThis.openedLogFolder = ''; shell.openPath = async folder => { globalThis.openedLogFolder = folder; return ''; }; });
   await panel.getByRole('button', { name: 'Open Log Folder', exact: true }).click();
   assert.equal(await application.evaluate(() => globalThis.openedLogFolder), path.join(profile, 'logs'));
-  const download = page.waitForEvent('download');
+  // Electron's app-owned will-download handler saves directly; unlike a browser
+  // context it does not promise Playwright's page 'download' notification.
   await panel.getByRole('button', { name: 'Export Debug Report', exact: true }).click();
-  await (await download).saveAs(path.join(output, 'debug-report.json'));
+  const deadline = Date.now() + 20000;
+  let nativeDownloads = [];
+  do {
+    nativeDownloads = await application.evaluate(() => globalThis.desktopDownloads);
+    if (nativeDownloads.some(item => item.state === 'completed')) break;
+    await new Promise(resolve => setTimeout(resolve, 100));
+  } while (Date.now() < deadline);
+  assert.ok(nativeDownloads.some(item => item.state === 'completed'), `Native report export did not finish: ${JSON.stringify(nativeDownloads)}`);
+  const saved = nativeDownloads.find(item => /^lyric-player-debug-.*\.json$/.test(item.name || ''));
+  assert.ok(saved && !saved.prevented, 'A real report download must be accepted by the trusted native session.');
+  await copyFile(path.join(root, path.basename(saved.name)), path.join(output, 'debug-report.json'));
   const reportText = await readFile(path.join(output, 'debug-report.json'), 'utf8'), report = JSON.parse(reportText);
   assert.equal(report.environment.version, '0.8.3'); assert.equal(report.debugMode, true);
   assert.ok(reportText.includes('decode-stage-recorded')); assert.ok(!reportText.includes('PrivateUser'));
@@ -91,5 +102,5 @@ try {
   await writeFile(path.join(output, 'report.json'), JSON.stringify({ passed: true, checks, errors }, null, 2));
   console.log(JSON.stringify({ passed: true, checks }, null, 2));
 } catch (error) {
-  await writeFile(path.join(output, 'failure.json'), JSON.stringify({ phase, error: String(error), stack: error.stack, errors, checks }, null, 2)); throw error;
+  await writeFile(path.join(output, 'failure.json'), JSON.stringify({ phase, error: String(error), stack: error.stack, errors, checks, downloads: await application?.evaluate(() => globalThis.desktopDownloads).catch(() => []) }, null, 2)); throw error;
 } finally { await application?.close(); }
