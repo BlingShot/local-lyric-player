@@ -16,6 +16,15 @@ await writeFile(entry, (await readFile('scripts/desktop-smoke-entry.mjs', 'utf8'
 const env = { ...process.env, DESKTOP_TEST_PROFILE: profile, DESKTOP_TEST_DOWNLOADS: root };
 delete env.ELECTRON_RUN_AS_NODE; delete env.LOCAL_MUSIC_DEV_URL;
 let application, phase = 'launch'; const errors = [], checks = [];
+const openSettingsTab = async (page, name) => {
+  await page.getByRole('button', { name: 'Settings', exact: true }).click();
+  await page.getByRole('button', { name, exact: true }).click();
+};
+const closeSettings = async page => {
+  const close = page.locator('.ant-modal-close');
+  if (await close.isVisible()) await close.click();
+  await page.locator('.settings-window').waitFor({ state: 'hidden' });
+};
 try {
   application = await electron.launch({ args: [entry], env, timeout: 30000 });
   const page = await application.firstWindow(); page.setDefaultTimeout(20000);
@@ -23,8 +32,7 @@ try {
   await page.getByRole('heading', { name: 'Local library', exact: true }).waitFor();
   assert.equal(page.url(), 'localmusic://app/');
   assert.equal(await application.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows().find(win => win.webContents.getURL().startsWith('localmusic://'))?.webContents.isOffscreen()), false);
-  await page.getByRole('button', { name: 'Settings', exact: true }).click();
-  await page.getByRole('button', { name: 'Advanced', exact: true }).click();
+  await openSettingsTab(page, 'Advanced');
   assert.equal(await page.getByRole('checkbox', { name: 'Debug mode', exact: true }).isChecked(), false);
   assert.equal(await page.getByRole('button', { name: 'Developer tools', exact: true }).isDisabled(), true);
   phase = 'real normal-mode log IPC';
@@ -35,12 +43,28 @@ try {
   let logs = await page.evaluate(() => window.localMusicDesktop.readLog());
   assert.ok(logs.includes('normal-mode-info')); assert.ok(!logs.includes('normal-mode-noise'));
   assert.equal(await page.locator('.debug-overlay').count(), 0);
-  checks.push('Packaged preload/main IPC filters DEBUG by default; developer tools and inline HUD remain disabled in normal mode.');
-  phase = 'real debug-mode persistence and redaction';
+  checks.push('Packaged preload/main IPC filters DEBUG by default; developer tools and lyric-surface diagnostics remain disabled in normal mode.');
+
+  phase = 'real debug-mode persistence and lyrics-surface placement';
   await page.getByRole('checkbox', { name: 'Debug mode', exact: true }).check();
   await page.waitForFunction(async () => (await window.localMusicDesktop.getConfig('diagnostics'))?.debug === true);
-  await page.locator('.debug-overlay-global').waitFor(); await page.locator('.debug-overlay-audio').waitFor();
-  assert.ok((await page.locator('.debug-overlay-global').innerText()).includes('FPS'));
+  // Diagnostics intentionally render only inside the Lyrics page. Do not expect
+  // global readouts while the Settings modal is sitting on the library route.
+  assert.equal(await page.locator('.debug-overlay').count(), 0);
+  await closeSettings(page);
+  await page.getByRole('button', { name: 'Lyrics', exact: true }).click();
+  await page.locator('.lyrics-page').waitFor();
+  const globalOverlay = page.locator('.lyrics-page > .lyrics-debug-band .debug-overlay-global');
+  const audioOverlay = page.locator('.lyrics-page > .lyrics-debug-band .debug-overlay-audio');
+  await globalOverlay.waitFor(); await audioOverlay.waitFor();
+  assert.equal(await page.locator('.offline-playing-bar .debug-overlay-audio').count(), 0);
+  assert.ok((await globalOverlay.innerText()).includes('Memory'));
+  assert.ok((await globalOverlay.innerText()).includes('FPS'));
+  assert.ok((await audioOverlay.innerText()).includes('Live bitrate'));
+  checks.push('Packaged debug telemetry is reserved inside the Lyrics page and is independent of the player bar/immersive chrome.');
+  await page.screenshot({ path: path.join(output, 'lyrics-debug-readouts.png') });
+  await openSettingsTab(page, 'Advanced');
+
   await page.evaluate(async () => {
     await window.localMusicDesktop.writeLog({ level: 'debug', scope: 'audio.test', message: 'decode-stage-recorded',
       data: { path: 'C:\\Users\\PrivateUser\\Music\\test.flac', apiKey: 'fixture-secret-not-real', error: { stack: 'Decode at C:\\Users\\PrivateUser\\Music\\test.flac' } } });
@@ -48,6 +72,7 @@ try {
   logs = await page.evaluate(() => window.localMusicDesktop.readLog());
   assert.ok(logs.includes('decode-stage-recorded')); assert.ok(logs.includes('test.flac'));
   assert.ok(!logs.includes('PrivateUser')); assert.ok(!logs.includes('fixture-secret-not-real'));
+
   phase = 'developer tools button';
   await page.getByRole('button', { name: 'Developer tools', exact: true }).click();
   const status = page.getByRole('status').filter({ hasText: 'Developer tools opened.' });
@@ -60,7 +85,8 @@ try {
   const devToolsOpen = await application.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows().some(win => win.webContents.getURL().startsWith('localmusic://') && win.webContents.isDevToolsOpened()));
   assert.equal(devToolsOpen, true);
   await application.evaluate(({ BrowserWindow }) => { for (const win of BrowserWindow.getAllWindows()) if (win.webContents.getURL().startsWith('localmusic://')) win.webContents.closeDevTools(); });
-  checks.push('The Settings developer-tools button opens and focuses real detached DevTools in the packaged app using the production renderer.');
+  checks.push('The Settings developer-tools button opens real DevTools in the packaged production renderer.');
+
   phase = 'native folder and report export';
   await application.evaluate(({ shell }) => { globalThis.openedLogFolder = ''; shell.openPath = async folder => { globalThis.openedLogFolder = folder; return ''; }; });
   await page.getByRole('button', { name: 'Open Log Folder', exact: true }).click();
@@ -83,7 +109,8 @@ try {
   assert.equal(report.environment.version, '0.8.3'); assert.equal(report.debugMode, true);
   assert.ok(reportText.includes('decode-stage-recorded')); assert.ok(!reportText.includes('PrivateUser'));
   assert.ok(!reportText.includes('fixture-secret-not-real')); assert.ok(report.environment.desktop.processMemory.length > 0);
-  checks.push('Real inline diagnostics, user-path/secret redaction, log-folder IPC and packaged report download pass.');
+  checks.push('Real diagnostics, user-path/secret redaction, log-folder IPC and packaged report download pass.');
+
   phase = 'native clipboard report copy';
   await application.evaluate(({ clipboard }) => clipboard.writeText('clipboard-test-sentinel'));
   await page.getByRole('button', { name: 'Copy Debug Info', exact: true }).click();
@@ -100,6 +127,7 @@ try {
   await assert.rejects(page.evaluate(() => window.localMusicDesktop.copyDebugInfo('{}')), /Invalid debug report/);
   assert.equal(await application.evaluate(({ clipboard }) => clipboard.readText()), copied);
   checks.push('Copy Debug Info writes a redacted report to the real native clipboard; invalid input leaves it unchanged and no read capability is exposed to the renderer.');
+
   phase = 'clear log files';
   const sentinel = path.join(profile, 'logs', 'keep.txt'); await writeFile(sentinel, 'user data');
   await page.getByRole('button', { name: 'Clear Logs', exact: true }).click();
@@ -108,6 +136,7 @@ try {
   await page.getByRole('checkbox', { name: 'Debug mode', exact: true }).uncheck();
   await page.waitForFunction(async () => (await window.localMusicDesktop.getConfig('diagnostics'))?.debug === false);
   assert.equal(await page.locator('.debug-overlay').count(), 0);
+
   phase = 'native cache clearing preserves IndexedDB';
   await page.evaluate(() => new Promise((resolve, reject) => {
     const request = indexedDB.open('debug-cache-preservation');
@@ -131,6 +160,7 @@ try {
   const storage = await page.evaluate(() => window.localMusicDesktop.storageInfo());
   assert.ok(Number.isFinite(storage.httpCacheBytes) && storage.httpCacheBytes >= 0);
   checks.push('The real Clear cache settings action completes through Electron and preserves durable IndexedDB data.');
+
   phase = 'packaged WASM worker through secure local protocol';
   const workerAsset = (await readdir('build/assets')).find(name => /^analysis\.worker-.*\.js$/.test(name));
   assert.ok(workerAsset);
@@ -143,10 +173,15 @@ try {
   }), workerAsset);
   assert.equal(result.error, undefined); assert.equal(result.result.outcome, 'unreliable');
   checks.push('The packaged analysis Worker loads its real WASM through localmusic:// under the production CSP.');
+
   phase = 'restart';
+  // Return to the library route so the restart assertion stays independent of
+  // the Lyrics route used above to validate inline diagnostics.
+  await closeSettings(page);
+  await page.getByRole('button', { name: 'Lyrics', exact: true }).click();
+  await page.getByRole('heading', { name: 'Local library', exact: true }).waitFor();
   await page.reload(); await page.getByRole('heading', { name: 'Local library', exact: true }).waitFor();
-  await page.getByRole('button', { name: 'Settings', exact: true }).click();
-  await page.getByRole('button', { name: 'Advanced', exact: true }).click();
+  await openSettingsTab(page, 'Advanced');
   assert.equal(await page.getByRole('checkbox', { name: 'Debug mode', exact: true }).isChecked(), false);
   assert.deepEqual(errors, []);
   await page.screenshot({ path: path.join(output, 'advanced.png') });
