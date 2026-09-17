@@ -2,7 +2,7 @@ name: Verify and build
 
 on:
   push:
-    branches: [main, codex-issues-7-11-20260916, 'codex/lyric-polish-20260916']
+    branches: [main, codex-issues-7-11-20260916, 'codex/lyric-polish-20260916', 'codex/debug-cache-package-20260917']
   pull_request:
     branches: [main]
   workflow_dispatch:
@@ -61,8 +61,16 @@ jobs:
         run: node scripts/test-round2-regressions.mjs
       - name: Lyric polish regressions
         run: node scripts/test-lyric-polish.mjs
+      - name: Debug, report privacy and cache regressions
+        run: npm run test:debug
+      - name: Production audio analysis and WASM regressions
+        run: |
+          npm run build
+          node scripts/test-audio-analysis.mjs
       - name: Build Windows portable
         run: npm run desktop:build
+      - name: Check desktop payload budget
+        run: npm run desktop:budget
       - uses: actions/upload-artifact@v4
         with:
           name: Lyric-Player-Windows-x64-${{ github.sha }}
@@ -83,5 +91,8 @@ jobs:
             test-results/issues-7-11/
             test-results/issues-1-6/
             test-results/lyric-polish/
+            test-results/debug-diagnostics/
+            test-results/package-size.json
+            test-results/audio-analysis/report.json
           if-no-files-found: ignore
           retention-days: 14
