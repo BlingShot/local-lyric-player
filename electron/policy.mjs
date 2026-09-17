@@ -16,6 +16,10 @@ export function allowedRequest(value, devUrl) {
   if (isAppUrl(value, devUrl)) return true;
   if (value.startsWith('blob:localmusic://app/') || value.startsWith('data:')) return true;
   if (devUrl && (value.startsWith(`blob:${devUrl}`) || value.startsWith(devUrl.replace('http:', 'ws:')))) return true;
+  // Electron's DevTools frontend is an internal devtools:// document. It must not be
+  // blocked by the app's outbound-network allowlist or Settings -> Developer tools
+  // cannot open in packaged builds. This does not grant access to an external origin.
+  try { if (new URL(value).protocol === 'devtools:') return true; } catch {}
   // Only the explicit analysis endpoint and official lyric resources may leave the app.
   try { const url = new URL(value); if (url.origin === 'https://api.amll.dev' && ['/v1/lyrics/get', '/v1/lyrics/search'].includes(url.pathname) && !url.username && !url.password) return true; } catch {}
   try {
