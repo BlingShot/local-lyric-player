@@ -17,6 +17,7 @@
 .debug-overlay dd { min-width: 0; margin: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-variant-numeric: tabular-nums; }
 .debug-overlay dd.debug-overlay-wide { grid-column: 2; }
 .lyrics-reader > .debug-overlay-lyrics { top: 12px; right: 12px; }
+.offline-playing-bar { position: relative; }
 .offline-playing-bar .debug-overlay-audio { left: 50%; bottom: calc(100% + 8px); transform: translateX(-50%); width: min(420px, calc(100vw - 40px)); }
 .debug-overlay-global { position: fixed; top: 66px; right: 18px; width: 250px; z-index: 1200; }
 .offline-app[data-lyrics-fullscreen] .debug-overlay-global { top: 88px; }
