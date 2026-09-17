@@ -18,7 +18,7 @@ declare global {
       nativeAudioDevices(): Promise<{ name: string; description: string }[]>;
       nativeAudioMeter(enabled: boolean): Promise<void>;
       nativeAudioEnergy(): Promise<number>;
-      nativeAudioBitrate(): Promise<number | null>;
+      nativeAudioBitrate?(): Promise<number | null>;
       nativeAudioLoad(value: { id: string; bytes: ArrayBuffer; device: string; exclusive: boolean; position: number; volume: number; speed: number; context: NativeCommandContext }): Promise<NativeAudioResult>;
       nativeAudioCommand(command: 'play' | 'pause' | 'seek' | 'volume' | 'speed' | 'stop', value: number | undefined, context: NativeCommandContext): Promise<NativeAudioResult>;
       onNativeAudioState(callback: (state: { id: string; time: number; duration: number; paused: boolean; ended: boolean; ready: boolean; error?: PlaybackErrorInfo; exclusive?: boolean }) => void): () => void;
