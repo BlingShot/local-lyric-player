@@ -23,6 +23,8 @@ class Helper extends NativeAudio {
       if (this.mode === 'timeout') return;
       queueMicrotask(() => this.receive(this.mode === 'corrupt' ? { event: 'end-file', reason: 'error' } : { event: 'file-loaded' }));
     }
+    if (this.mode === 'property-unavailable' && command[0] === 'get_property' && ['duration', 'current-ao'].includes(command[1]))
+      throw new Error('Native audio: property unavailable');
     if (command[1] === 'duration') return 10;
     if (command[1] === 'current-ao') return this.mode === 'output-failure' ? 'null' : 'wasapi';
   }
@@ -44,6 +46,16 @@ test('F11 corrupt files, load timeouts and failed output checks do not accumulat
   await audio.load(request()); assert.equal(audio.files.size, 1);
   await audio.dispose();
   await assert.rejects(readdir(directory), { code: 'ENOENT' });
+});
+
+test('F11 transient unavailable mpv properties after file-loaded do not reject a healthy song', async t => {
+  const audio = new Helper('unused', path.join(await root(t), 'session'));
+  audio.mode = 'property-unavailable';
+  await audio.load(request());
+  assert.equal(audio.state.ready, true);
+  assert.equal(audio.state.error, undefined);
+  assert.equal(audio.state.duration, 0);
+  await audio.dispose();
 });
 
 test('F11 busy deletes retain ownership, have bounded retries and cap live copies', async t => {
