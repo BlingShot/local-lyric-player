@@ -1,35 +1,48 @@
 .debug-overlay {
-  --debug-surface: rgb(8 10 13 / 84%);
-  --debug-border: rgb(255 255 255 / 16%);
-  --debug-muted: rgb(255 255 255 / 56%);
-  position: absolute; z-index: 30; pointer-events: none; box-sizing: border-box;
-  width: min(360px, calc(100% - 24px)); padding: 9px 11px 10px;
-  color: #f5f7f8; background: var(--debug-surface); border: 1px solid var(--debug-border); border-radius: 9px;
-  box-shadow: 0 8px 28px rgb(0 0 0 / 28%); backdrop-filter: blur(14px) saturate(1.1);
-  font: 500 10px/1.35 ui-monospace, SFMono-Regular, Consolas, 'Liberation Mono', monospace;
-  letter-spacing: 0; text-align: left;
+  --debug-muted: rgb(255 255 255 / 54%);
+  position: fixed; z-index: 850; pointer-events: none; box-sizing: border-box;
+  color: rgb(255 255 255 / 78%);
+  font-family: var(--app-font-family, system-ui, sans-serif);
+  font-size: 12px; line-height: 1.42; font-weight: 600;
+  letter-spacing: 0; text-align: left; text-shadow: 0 1px 2px rgb(0 0 0 / 42%);
+  font-variant-numeric: tabular-nums;
 }
-.debug-overlay header { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin-bottom: 7px; }
-.debug-overlay header strong { font-size: 10px; letter-spacing: .08em; }
-.debug-overlay header span { color: #9cf3c3; font-size: 9px; letter-spacing: .1em; }
-.debug-overlay dl { display: grid; grid-template-columns: max-content minmax(0, 1fr); gap: 3px 9px; margin: 0; }
-.debug-overlay dt { color: var(--debug-muted); white-space: nowrap; }
-.debug-overlay dd { min-width: 0; margin: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-variant-numeric: tabular-nums; }
-.debug-overlay dd.debug-overlay-wide { grid-column: 2; }
-.lyrics-reader > .debug-overlay-lyrics { top: 12px; right: 12px; }
+.debug-readout-row { display: flex; align-items: baseline; justify-content: center; flex-wrap: wrap; gap: 3px 16px; }
+.debug-readout-secondary { margin-top: 1px; color: rgb(255 255 255 / 58%); font-size: 11px; }
+.debug-readout-field { min-width: 0; display: inline-flex; align-items: baseline; gap: .38em; white-space: nowrap; }
+.debug-readout-label { color: var(--debug-muted); font-weight: 500; }
+.debug-readout-value { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.debug-readout-wide { display: flex; width: 100%; }
+
+/* Global and audio telemetry sit in the unused top-center band instead of floating cards. */
+.debug-overlay-global { top: 12px; left: 50%; width: min(760px, calc(100vw - 420px)); transform: translateX(-50%); }
 .offline-playing-bar { position: relative; }
-.offline-playing-bar .debug-overlay-audio { left: 50%; bottom: calc(100% + 8px); transform: translateX(-50%); width: min(420px, calc(100vw - 40px)); }
-.debug-overlay-global { position: fixed; top: 66px; right: 18px; width: 250px; z-index: 850; }
-.offline-app[data-lyrics-fullscreen] .debug-overlay-global { top: 88px; }
-[data-theme=light] .debug-overlay { --debug-surface: rgb(247 249 250 / 88%); --debug-border: rgb(0 0 0 / 14%); --debug-muted: rgb(0 0 0 / 56%); color: #14171a; box-shadow: 0 8px 28px rgb(20 30 40 / 14%); }
-[data-theme=light] .debug-overlay header span { color: #08783e; }
-@media (max-width: 900px) {
-  .debug-overlay-global { top: 60px; right: 10px; width: 220px; }
-  .lyrics-reader > .debug-overlay-lyrics { right: 8px; width: min(320px, calc(100% - 16px)); }
+.offline-playing-bar .debug-overlay-audio {
+  position: fixed; top: 48px; left: 50%; bottom: auto; width: min(980px, calc(100vw - 360px)); transform: translateX(-50%); z-index: 850;
 }
-@media (max-width: 600px) {
-  .debug-overlay-global { display: none; }
-  .offline-playing-bar .debug-overlay-audio { left: 8px; right: 8px; width: auto; transform: none; }
-  .lyrics-reader > .debug-overlay-lyrics { top: 8px; left: 8px; right: 8px; width: auto; }
+/* Lyric-specific telemetry is printed directly into the right side of the lyric canvas. */
+.lyrics-reader > .debug-overlay-lyrics {
+  position: absolute; top: 62%; right: 24px; width: min(330px, 30vw); transform: translateY(-50%); z-index: 30;
+  display: flex; flex-direction: column; gap: 2px;
 }
-@media (prefers-reduced-transparency: reduce) { .debug-overlay { backdrop-filter: none; background: #0c0d0f; } }
+.lyrics-reader > .debug-overlay-lyrics .debug-readout-field { gap: .55em; }
+.lyrics-reader > .debug-overlay-lyrics .debug-readout-label { flex: 0 0 72px; }
+.lyrics-reader > .debug-overlay-lyrics .debug-readout-value { flex: 1 1 auto; }
+
+[data-theme=light] .debug-overlay {
+  --debug-muted: rgb(0 0 0 / 52%); color: rgb(12 16 20 / 74%); text-shadow: 0 1px 1px rgb(255 255 255 / 55%);
+}
+[data-theme=light] .debug-readout-secondary { color: rgb(0 0 0 / 54%); }
+
+@media (max-width: 1100px) {
+  .debug-overlay-global { width: min(620px, calc(100vw - 300px)); }
+  .offline-playing-bar .debug-overlay-audio { width: min(760px, calc(100vw - 220px)); }
+  .lyrics-reader > .debug-overlay-lyrics { right: 14px; width: min(280px, 34vw); }
+}
+@media (max-width: 760px) {
+  .debug-overlay { font-size: 11px; }
+  .debug-overlay-global { top: 8px; width: calc(100vw - 24px); }
+  .offline-playing-bar .debug-overlay-audio { top: 38px; width: calc(100vw - 24px); }
+  .debug-readout-secondary { display: none; }
+  .lyrics-reader > .debug-overlay-lyrics { top: auto; right: 10px; bottom: 18px; width: min(270px, calc(100% - 20px)); transform: none; }
+}
