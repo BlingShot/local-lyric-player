@@ -8,7 +8,7 @@
   font-variant-numeric: tabular-nums;
 }
 .debug-readout-row { display: flex; align-items: baseline; justify-content: center; flex-wrap: wrap; gap: 3px 16px; }
-.debug-readout-secondary { margin-top: 1px; color: rgb(255 255 255 / 58%); font-size: 11px; }
+.debug-readout-secondary { margin-top: 1px; color: rgb(255 255 255 / 58%); }
 .debug-readout-field { min-width: 0; display: inline-flex; align-items: baseline; gap: .38em; white-space: nowrap; }
 .debug-readout-label { color: var(--debug-muted); font-weight: 500; }
 .debug-readout-value { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
@@ -40,7 +40,6 @@
   .lyrics-reader > .debug-overlay-lyrics { right: 14px; width: min(280px, 34vw); }
 }
 @media (max-width: 760px) {
-  .debug-overlay { font-size: 11px; }
   .debug-overlay-global { top: 8px; width: calc(100vw - 24px); }
   .offline-playing-bar .debug-overlay-audio { top: 38px; width: calc(100vw - 24px); }
   .debug-readout-secondary { display: none; }
