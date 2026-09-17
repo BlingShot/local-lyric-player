@@ -24,10 +24,13 @@ try {
   await page.waitForTimeout(1200); assert.ok((await call(page, 'stats')).samples >= 2);
   const lyricOverlay = page.locator('.debug-overlay-lyrics'), audioOverlay = page.locator('.debug-overlay-audio'), globalOverlay = page.locator('.debug-overlay-global');
   await lyricOverlay.waitFor(); await audioOverlay.waitFor(); await globalOverlay.waitFor();
+  assert.equal(await page.locator('.lyrics-page > .lyrics-debug-band .debug-overlay-global').count(), 1);
+  assert.equal(await page.locator('.lyrics-page > .lyrics-debug-band .debug-overlay-audio').count(), 1);
+  assert.equal(await page.locator('.offline-playing-bar .debug-overlay-audio').count(), 0);
   const lyricText = await lyricOverlay.innerText(); assert.ok(lyricText.includes('AMLL TTML')); assert.ok(lyricText.includes('Line')); assert.ok(lyricText.includes('Word'));
-  const audioText = await audioOverlay.innerText(); assert.ok(audioText.includes('Backend')); assert.ok(audioText.includes('Clock'));
-  const globalText = await globalOverlay.innerText(); assert.ok(globalText.includes('FPS')); assert.ok(globalText.includes('Warn/Error'));
-  await page.screenshot({ path: `${output}/inline-overlays.png` });
+  const audioText = await audioOverlay.innerText(); assert.ok(audioText.includes('Backend')); assert.ok(audioText.includes('Clock')); assert.ok(audioText.includes('Live bitrate'));
+  const globalText = await globalOverlay.innerText(); assert.ok(globalText.includes('Memory')); assert.ok(globalText.includes('FPS')); assert.ok(globalText.includes('Warn/Error'));
+  await page.screenshot({ path: `${output}/inline-readouts.png` });
   await call(page, 'sensitiveError'); await page.waitForTimeout(550);
   const report = await call(page, 'report'); const parsed = JSON.parse(report);
   for (const key of ['environment', 'currentSong', 'audio', 'lyrics', 'amllTtml', 'performance', 'recentErrors', 'recentLogs', 'recentDesktopLogs']) assert.ok(key in parsed, key);
@@ -38,7 +41,7 @@ try {
   const download = page.waitForEvent('download'); await page.getByRole('button', { name: 'Export Debug Report', exact: true }).click();
   const file = await download; await file.saveAs(`${output}/debug-report.json`); JSON.parse(await readFile(`${output}/debug-report.json`, 'utf8'));
   await page.getByRole('button', { name: 'Open Log Folder', exact: true }).click(); assert.equal((await call(page, 'stats')).opened, 1);
-  results.push({ report: 'inline HUD, copy/export/IPC folder action and secret/path redaction passed' });
+  results.push({ report: 'lyrics-surface readouts, copy/export/IPC folder action and secret/path redaction passed' });
   results.push(await call(page, 'amllFlow')); results.push(await call(page, 'parserFailure')); results.push(await call(page, 'decoderFailure'));
   await page.waitForTimeout(550);
   const afterError = await globalOverlay.innerText(); assert.match(afterError, /Warn\/Error\s+[0-9]+\s+\/\s+[1-9][0-9]*/);
@@ -47,7 +50,7 @@ try {
   const stopped = await call(page, 'stats'); await page.waitForTimeout(1400); const later = await call(page, 'stats');
   assert.equal(later.samples, stopped.samples); assert.equal(later.desktopPolls, stopped.desktopPolls); assert.equal(later.debug, false);
   assert.equal(await page.locator('.debug-overlay').count(), 0);
-  assert.deepEqual(errors, []); results.push({ disabled: 'sampler, main-process polling and inline overlays stopped', samples: later.samples });
+  assert.deepEqual(errors, []); results.push({ disabled: 'sampler, main-process polling and lyric readouts stopped', samples: later.samples });
   await writeFile(`${output}/report.json`, JSON.stringify({ passed: true, results, errors }, null, 2)); console.log(JSON.stringify(results, null, 2));
 } catch (error) { await writeFile(`${output}/failure.json`, JSON.stringify({ error: String(error), stack: error.stack, results, errors }, null, 2)); throw error; }
 finally { await browser?.close(); await server.close(); }
