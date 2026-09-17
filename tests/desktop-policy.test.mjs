@@ -9,8 +9,9 @@ test('desktop origin permits local routes and explicitly configured development 
   assert.equal(isAppUrl('http://127.0.0.1:3000/'), false);
   assert.ok(isAppUrl('http://127.0.0.1:3000/studio', 'http://127.0.0.1:3000/'));
 });
-test('network policy allows local media and the existing explicit DeepSeek endpoint only', () => {
+test('network policy allows local media, internal DevTools and explicit app endpoints only', () => {
   assert.ok(allowedRequest('blob:localmusic://app/id'));
+  assert.ok(allowedRequest('devtools://devtools/bundled/devtools_app.html'));
   assert.ok(allowedRequest('https://api.deepseek.com/chat/completions'));
   for (const url of ['https://example.com/', 'https://api.deepseek.com/other', 'https://api.deepseek.com.evil/chat/completions', 'file:///C:/secret']) assert.equal(allowedRequest(url), false);
 });
