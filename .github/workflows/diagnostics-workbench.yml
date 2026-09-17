@@ -6,7 +6,7 @@ on:
 permissions:
   contents: read
 jobs:
-  browser-runtime:
+  source-runtime:
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
@@ -18,10 +18,9 @@ jobs:
           node-version: '22'
           cache: npm
       - run: npm ci --ignore-scripts --no-audit --no-fund
-      - run: npx playwright install chromium --only-shell
-      - run: tar -czf diagnostic-browser.tgz -C ~/.cache/ms-playwright .
+      - run: tar -czf "$RUNNER_TEMP/diagnostic-source.tgz" --exclude=.git .
       - uses: actions/upload-artifact@v4
         with:
-          name: diagnostic-browser
-          path: diagnostic-browser.tgz
+          name: diagnostic-source
+          path: ${{ runner.temp }}/diagnostic-source.tgz
           retention-days: 1
