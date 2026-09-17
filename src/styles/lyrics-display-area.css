@@ -9,6 +9,21 @@
 .offline-app:not([data-lyrics-fullscreen]) .lyrics-page .lyrics-reader {
   --duet-gap: clamp(20px, 2.8cqi, 48px);
 }
+/* The debug band is now an ordinary flex row inside the lyrics page. Keep the
+   remaining lyric viewport as the flexible region; otherwise wrapping LyricsView
+   in lyrics-content can leave an unused strip at the bottom or disturb scroll geometry. */
+.lyrics-page .lyrics-content {
+  flex: 1 1 auto;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+.lyrics-page .lyrics-content > .lyrics-reader,
+.lyrics-page .lyrics-content > .lyrics-empty {
+  flex: 1 1 auto;
+  min-height: 0;
+}
 @container (max-width: 600px) {
   .offline-app:not([data-lyrics-fullscreen]) .lyrics-page .lyrics-lines {
     width: 100% !important;
