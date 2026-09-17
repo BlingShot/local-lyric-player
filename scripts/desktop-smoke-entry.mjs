@@ -4,7 +4,9 @@ import { startDesktop } from '../electron/app.mjs';
 
 globalThis.desktopWindowEvents = [];
 globalThis.desktopDownloads = [];
-startDesktop({ show: false, userData: process.env.DESKTOP_TEST_PROFILE, singleInstance: false,
+// DevTools are a visible-window feature in production. Keep this packaged smoke test
+// faithful to that environment instead of testing DevTools against a hidden BrowserWindow.
+startDesktop({ show: true, userData: process.env.DESKTOP_TEST_PROFILE, singleInstance: false,
   onWindow(win) {
     win.webContents.setAudioMuted(true);
     for (const name of ['show', 'focus', 'restore']) win.on(name, () => globalThis.desktopWindowEvents.push(name));
