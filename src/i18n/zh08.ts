@@ -21,7 +21,7 @@ export const zh08: Record<string, string> = {
   'Native playback devices are available in the Windows desktop app.': '原生播放设备选项仅在 Windows 桌面应用中可用。',
   'Switching playback device...': '正在切换播放设备…',
   'Searching Spotify ISRC...': '正在查询 Spotify ISRC…', 'Searching AMLL TTML...': '正在搜索 AMLL 歌词…',
-  'Searching AMLL by title and artist...': '正在按歌名和歌手搜索 AMLL…', 'Downloading AMLL TTML...': '正在下载 AMLL 歌词…',
+  'Searching AMLL by title and artist...': '正在按歌名和歌手搜索 AMLL…', 'Downloading AMLL TTML...': '正在下载 AMLL TTML…',
   'AMLL has no matching TTML. Using local lyrics.': 'AMLL 暂无匹配的 TTML，使用本地歌词。',
   'AMLL has multiple recording matches. Using local lyrics.': 'AMLL 存在多个录音版本，暂时使用本地歌词。',
   'Spotify lookup failed and AMLL title search found no match. Using local lyrics.': 'Spotify 查询失败，AMLL 歌名搜索未找到匹配，使用本地歌词。',
