@@ -10,7 +10,9 @@ const root = await mkdtemp(path.join(output, 'run-')), profile = path.join(root,
 await mkdir(profile); await writeFile(path.join(profile, 'config.json'), JSON.stringify({ version: 1, settings: { language: 'en' } }));
 const entry = path.join(root, 'entry.mjs');
 const bundle = pathToFileURL(path.resolve('release/win-unpacked/resources/app.asar/electron/app.mjs')).href;
-await writeFile(entry, (await readFile('scripts/desktop-smoke-entry.mjs', 'utf8')).replace('../electron/app.mjs', bundle).replace('show: false,', 'show: false, offscreen: true,'));
+// Keep the packaged smoke window hidden, but use the same normal renderer as production.
+// Electron DevTools do not represent a production-valid check against the separate offscreen test renderer.
+await writeFile(entry, (await readFile('scripts/desktop-smoke-entry.mjs', 'utf8')).replace('../electron/app.mjs', bundle));
 const env = { ...process.env, DESKTOP_TEST_PROFILE: profile, DESKTOP_TEST_DOWNLOADS: root };
 delete env.ELECTRON_RUN_AS_NODE; delete env.LOCAL_MUSIC_DEV_URL;
 let application, phase = 'launch'; const errors = [], checks = [];
@@ -20,6 +22,7 @@ try {
   page.on('pageerror', error => errors.push(error.message));
   await page.getByRole('heading', { name: 'Local library', exact: true }).waitFor();
   assert.equal(page.url(), 'localmusic://app/');
+  assert.equal(await application.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows().find(win => win.webContents.getURL().startsWith('localmusic://'))?.webContents.isOffscreen()), false);
   await page.getByRole('button', { name: 'Settings', exact: true }).click();
   await page.getByRole('button', { name: 'Advanced', exact: true }).click();
   assert.equal(await page.getByRole('checkbox', { name: 'Debug mode', exact: true }).isChecked(), false);
@@ -47,11 +50,17 @@ try {
   assert.ok(!logs.includes('PrivateUser')); assert.ok(!logs.includes('fixture-secret-not-real'));
   phase = 'developer tools button';
   await page.getByRole('button', { name: 'Developer tools', exact: true }).click();
-  await page.getByRole('status').filter({ hasText: 'Developer tools opened.' }).waitFor();
+  const status = page.getByRole('status').filter({ hasText: 'Developer tools opened.' });
+  const failure = page.getByRole('alert');
+  const result = await Promise.race([
+    status.waitFor().then(() => 'opened'),
+    failure.waitFor().then(async () => `failed: ${await failure.innerText()}`),
+  ]);
+  assert.equal(result, 'opened', `Developer tools action failed in the production renderer: ${result}`);
   const devToolsOpen = await application.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows().some(win => win.webContents.getURL().startsWith('localmusic://') && win.webContents.isDevToolsOpened()));
   assert.equal(devToolsOpen, true);
   await application.evaluate(({ BrowserWindow }) => { for (const win of BrowserWindow.getAllWindows()) if (win.webContents.getURL().startsWith('localmusic://')) win.webContents.closeDevTools(); });
-  checks.push('The Settings developer-tools button opens and focuses real detached DevTools in the packaged app.');
+  checks.push('The Settings developer-tools button opens and focuses real detached DevTools in the packaged app using the production renderer.');
   phase = 'native folder and report export';
   await application.evaluate(({ shell }) => { globalThis.openedLogFolder = ''; shell.openPath = async folder => { globalThis.openedLogFolder = folder; return ''; }; });
   await page.getByRole('button', { name: 'Open Log Folder', exact: true }).click();
