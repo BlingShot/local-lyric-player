@@ -58,8 +58,9 @@ export function AppLayout({ children }: { children: ReactNode }) {
   useLayoutEffect(() => {
     if (mobile) return;
     const target = compact ? 85 : `${Math.max(tablet ? 25 : 20, expandedLibrarySize.current)}%`;
-    const frame = requestAnimationFrame(() => libraryPanel.current?.resize(target));
-    return () => cancelAnimationFrame(frame);
+    // Resize synchronously before paint: the collapsed/expanded library content
+    // must never render for one frame inside the still-animating old width.
+    libraryPanel.current?.resize(target);
   }, [compact, mobile, tablet, ui.detailsOpen, libraryPanel]);
   useLayoutEffect(() => {
     if (mobile) return;
@@ -107,7 +108,8 @@ export function AppLayout({ children }: { children: ReactNode }) {
 
       <Drawer title={t("Your library")} open={mobile && ui.libraryDrawerOpen && !ui.lyricsFullscreen} placement='left' width={300}
         onClose={() => dispatch(uiActions.closeLibraryDrawer())}><Library drawer /></Drawer>
-      <Drawer title={t("File details")} open={(tablet || ui.lyricsFullscreen) && ui.detailsOpen} placement='right' width={320}
+      <Drawer title={t("File details")} open={(tablet || ui.lyricsFullscreen) && ui.detailsOpen} placement='right'
+        width={ui.lyricsFullscreen ? `${Math.min(30, Math.max(23, expandedDetailsSize.current))}%` : 320}
         onClose={() => dispatch(uiActions.toggleDetails())}><FileDetails visible={(tablet || ui.lyricsFullscreen) && ui.detailsOpen} /></Drawer>
     </div>
   );

@@ -12,7 +12,8 @@ import { TrackEditor } from '../../components/LocalTracks/TrackEditor';
 
 export function LibraryTabs() {
   return <div className='offline-page-tabs'><Link to='/' className='chip'><span>{t("All music")}</span></Link>
-    <Link to='/collection/albums' className='chip'><span>{t("Albums")}</span></Link></div>;
+    <Link to='/collection/albums' className='chip'><span>{t("Albums")}</span></Link>
+    <Link to='/collection/recent' className='chip'><span>{t("Recently played")}</span></Link></div>;
 }
 function playAlbum(album: LocalAlbum) {
   const first = album.tracks.find(track => !track.unavailable);

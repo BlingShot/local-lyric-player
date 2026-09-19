@@ -109,6 +109,7 @@ export class LocalAudioPlayer {
 
   private update(patch: Partial<PlaybackState>) {
     if (this.disposed) return;
+    if (patch.queue && new Set(patch.queue).size !== patch.queue.length) patch = { ...patch, queue: [...new Set(patch.queue)] };
     if (Object.entries(patch).every(([key, value]) => this.state[key as keyof PlaybackState] === value)) return;
     this.state = { ...this.state, ...patch };
     this.options.onChange(this.state);
@@ -160,13 +161,13 @@ export class LocalAudioPlayer {
   addTracks(tracks: readonly { id: string; url: string }[]) {
     const added: string[] = [];
     for (const { id, url } of tracks) {
-      if (this.sources.has(id)) { this.options.revokeUrl(url); continue; }
+      if (this.sources.has(id) || this.originalQueue.includes(id)) { this.options.revokeUrl(url); continue; }
       this.sources.set(id, url);
       this.originalQueue.push(id);
       added.push(id);
     }
     if (added.length) this.update({
-      queue: [...this.state.queue, ...(this.state.shuffle ? shuffled(added, this.options.random) : added)],
+      queue: [...new Set([...this.state.queue, ...(this.state.shuffle ? shuffled(added, this.options.random) : added)])],
     });
   }
 

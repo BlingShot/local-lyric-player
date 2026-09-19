@@ -3,7 +3,7 @@ import path from 'node:path';
 import { createHash } from 'node:crypto';
 
 const limit = 32 * 1024 * 1024;
-const slotName = slot => { if (!['app', 'lyrics'].includes(slot)) throw new Error('Invalid font target.'); return slot; };
+const slotName = slot => { if (!['app', 'app-cjk', 'lyrics', 'lyrics-cjk'].includes(slot)) throw new Error('Invalid font target.'); return slot; };
 const name = text => typeof text === 'string' && text.length > 0 && text.length <= 240 && !/[\x00-\x1f]/.test(text);
 const fileName = value => typeof value === 'string' && /^[a-f0-9]{64}\.font$/.test(value);
 export class DesktopFonts {

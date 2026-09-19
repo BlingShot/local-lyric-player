@@ -27,12 +27,15 @@ let connection: Promise<IDBDatabase> | undefined;
 export function openLibraryDatabase(): Promise<IDBDatabase> {
   if (connection) return connection;
   connection = new Promise<IDBDatabase>((resolve, reject) => {
-    const request = indexedDB.open(DATABASE_NAME, 5);
+    const request = indexedDB.open(DATABASE_NAME, 6);
     let blocked = false;
     request.onupgradeneeded = () => {
       for (const name of stores) {
         if (!request.result.objectStoreNames.contains(name)) request.result.createObjectStore(name);
       }
+      // New imports are also protected against concurrent imports in other windows.
+      const trackStore = request.transaction!.objectStore('tracks');
+      if (!trackStore.indexNames.contains('importHash')) trackStore.createIndex('importHash', 'importHash', { unique: true });
       // Add a candidate fingerprint without changing any legacy primary/foreign key.
       const cursorRequest = request.transaction!.objectStore('tracks').openCursor();
       cursorRequest.onsuccess = () => {

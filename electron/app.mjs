@@ -76,9 +76,13 @@ export async function startDesktop({ show = true, userData, singleInstance = tru
   const config = new DesktopConfig(locations.dataPath, safeStorage);
   const logger = new DesktopLogger(locations.dataPath);
   const log = (level, scope, message) => { void logger.write({ level, scope, message: redactLogText(message) }).catch(() => {}); };
-  try { logger.setDebug((await config.get('diagnostics'))?.debug === true); } catch (error) { log('warn', 'config', error); }
+  try {
+    const diagnostics = await config.get('diagnostics');
+    logger.setDebug(diagnostics?.debug === true);
+    if (['debug', 'info', 'warn', 'error', 'fatal'].includes(diagnostics?.level)) logger.setLevel(diagnostics.level);
+  } catch (error) { log('warn', 'config', error); }
   log('info', 'startup', `Lyric Player ${app.getVersion()} / ${process.platform} ${process.arch}`);
-  process.on('uncaughtExceptionMonitor', error => log('error', 'main', error));
+  process.on('uncaughtExceptionMonitor', error => logger.writeFatal({ scope: 'main', message: redactLogText(error), data: { error } }));
   app.on('child-process-gone', (_event, details) => log('error', 'process', `${details.type}: ${details.reason} (${details.exitCode})`));
   const folders = new FolderImporter(config);
   await ses.protocol.handle('localmusic', request => new URL(request.url).pathname.startsWith('/__folder/') ? folders.response(request) : localResponse(request));
@@ -118,8 +122,8 @@ export async function startDesktop({ show = true, userData, singleInstance = tru
   });
   registerStorageIpc(win, storage, devUrl);
   registerSettingsIpc(win, config, folders, devUrl, logger);
-  win.webContents.on('render-process-gone', (_event, details) => log('error', 'renderer', `${details.reason} (${details.exitCode})`));
-  win.webContents.on('preload-error', (_event, _file, error) => log('error', 'preload', error));
+  win.webContents.on('render-process-gone', (_event, details) => log(details.reason === 'clean-exit' ? 'info' : 'fatal', 'renderer', `${details.reason} (${details.exitCode})`));
+  win.webContents.on('preload-error', (_event, _file, error) => log('fatal', 'preload', error));
   ipcMain.handle('desktop-window:theme', (event, mode) => {
     if (event.sender !== win.webContents || event.senderFrame !== win.webContents.mainFrame ||
         !isAppUrl(event.senderFrame.url, devUrl) || !['dark', 'light'].includes(mode)) throw new Error('Invalid window theme request.');

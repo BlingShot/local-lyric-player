@@ -52,6 +52,10 @@
 .studio-page .studio-word-panel > summary { display: flex; align-items: center; color: var(--studio-text); min-height: 32px; font-size: 13px; }
 .studio-page .studio-word-panel > summary > span:last-child { margin-left: auto; color: var(--studio-muted); font-size: 12px; }
 .studio-page .studio-word-panel-body { padding-top: 10px; }
+/* Native details disclosure with an eased height expansion for the word timing dock. */
+.studio-page .studio-word-panel { interpolate-size: allow-keywords; transition: flex-basis 300ms cubic-bezier(.22, 1, .36, 1); }
+.studio-page .studio-word-panel::details-content { block-size: 0; overflow-y: clip; transition: block-size 300ms cubic-bezier(.22, 1, .36, 1), content-visibility 300ms allow-discrete; }
+.studio-page .studio-word-panel[open]::details-content { block-size: auto; }
 .studio-page .studio-preview-line [data-preview-word][data-recording] { color: var(--studio-text); background: none; text-decoration: underline; text-decoration-color: var(--studio-accent); text-underline-offset: 5px; }
 .studio-page .studio-annotations .studio-annotation-heading { justify-content: space-between; align-items: center; color: var(--studio-text); }
 .studio-page .studio-annotation-heading > button { min-height: 28px; padding: 4px 8px; }
@@ -76,4 +80,4 @@
   .studio-page .studio-row-actions .studio-annotation-toggle { display: none; }
   .studio-page .studio-sync-context { flex-wrap: wrap; }
 }
-@media (prefers-reduced-motion: reduce) { .studio-page .studio-sync-row { transition: none; } }
+@media (prefers-reduced-motion: reduce) { .studio-page .studio-sync-row, .studio-page .studio-word-panel, .studio-page .studio-word-panel::details-content { transition: none; } }

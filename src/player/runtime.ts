@@ -1,7 +1,9 @@
+import { mergeDuplicateRecords, undoDuplicateMerge } from '../library/duplicateCleanup';
+import { readStudioDraft, studioRecoveries } from '../studio/repository';
 import { diagnosticLog } from '../desktop/diagnostics';
 import { lyricRevision } from '../lyrics/revision';
 import { attachNativeAudio } from './nativeAudio';
-import { readLyrics } from '../lyrics/repository';
+import { readLyrics, saveLyrics } from '../lyrics/repository';
 import { store } from '../store/store';
 import { libraryActions } from '../store/slices/library';
 import { playerActions } from '../store/slices/player';
@@ -56,15 +58,19 @@ function rememberDuration(id: string, duration: number) {
   if (previous !== duration) void saveTrackPatch(id, { duration, durationChecked: true });
 }
 
-function embeddedRecord(id: string, name: string, lyrics?: EmbeddedLyrics): SavedLyrics | undefined {
-  return lyrics ? { trackId: id, fileName: `${name}.embedded.${lyrics.document.format}`, source: lyrics.source, document: lyrics.document,
-    parserVersion: LYRICS_PARSER_VERSION, savedAt: Date.now(), origin: 'embedded' } : undefined;
+function embeddedRecord(id: string, name: string, lyrics?: EmbeddedLyrics, ttml?: EmbeddedLyrics): SavedLyrics | undefined {
+  const primary = ttml ?? lyrics;
+  if (!primary) return undefined;
+  const alternates = (ttml && lyrics ? [{ format: lyrics.document.format, fileName: `${name}.embedded.${lyrics.document.format}`, source: lyrics.source, document: lyrics.document }] : [])
+    .filter(variant => variant.document.format !== primary.document.format);
+  return { trackId: id, fileName: `${name}.embedded.${primary.document.format}`, source: primary.source, document: primary.document,
+    parserVersion: LYRICS_PARSER_VERSION, savedAt: Date.now(), origin: 'embedded', ...(alternates.length ? { alternates } : {}) };
 }
 
 async function readSavedDuration(id: string, audio: Blob) {
   const track = store.getState().library.tracks.find(item => item.id === id);
   if (!track) return;
-  const { tags, lyrics } = await readAudioTags(new File([audio], track.fileName || track.name, { type: audio.type }), true);
+  const { tags, lyrics, ttml } = await readAudioTags(new File([audio], track.fileName || track.name, { type: audio.type }), true);
   if (stopped) return;
   // Actual media events may already have supplied a duration while the worker was reading.
   const latest = store.getState().library.tracks.find(item => item.id === id);
@@ -72,7 +78,7 @@ async function readSavedDuration(id: string, audio: Blob) {
   await saveTrackPatch(id, { ...(!latest.duration ? { duration: tags.duration, durationChecked: true } : {}),
     analysisMetadata: tags.analysisMetadata, embeddedLyricsChecked: true,
     ...(!track.embeddedLyricsChecked ? { lyricsWarning: tags.lyricsWarning } : {}) },
-    !track.embeddedLyricsChecked ? embeddedRecord(id, track.fileName || track.name, lyrics) : undefined);
+    !track.embeddedLyricsChecked ? embeddedRecord(id, track.fileName || track.name, lyrics, ttml) : undefined);
 }
 
 async function backfillDurations() {
@@ -256,9 +262,9 @@ export function importAudioFiles(files: readonly File[], onResolved?: (ids: read
       store.dispatch(libraryActions.setBusy(`Reading and saving ${index + 1} of ${result.tracks.length}…`));
       const file = originals.get(track.id)!;
       await file.slice(0, 1).arrayBuffer(); await file.slice(-1).arrayBuffer();
-      const { tags, cover, lyrics } = await readAudioTags(file);
+      const { tags, cover, lyrics, ttml } = await readAudioTags(file);
       saved.push({ track: { ...track, ...tags, id: track.id, addedAt: addedAt + index, audioRevision: crypto.randomUUID() }, audio: file, cover,
-        lyrics: embeddedRecord(track.id, file.name, lyrics) });
+        lyrics: embeddedRecord(track.id, file.name, lyrics, ttml) });
     }
     if (saved.length) await saveTracks(saved);
     const tracks = saved.map(item => {
@@ -313,8 +319,9 @@ export async function writeLocalLyricsCopy(id: string, source: string, expected?
     const result = await writeAudioLyrics(original, track.fileName || track.name, source);
     // Re-read the actual new tag with the same reader used by the player before committing.
     const verified = await readAudioTags(new File([result], track.fileName || track.name, { type: result.type }), true);
-    if (verified.lyrics?.source.trim() !== source.trim()) throw new Error('The written lyrics could not be verified. The saved audio copy is unchanged.');
-    const record = embeddedRecord(id, track.fileName || track.name, verified.lyrics)!;
+    const verifiedLyrics = verified.ttml ?? verified.lyrics;
+    if (verifiedLyrics?.source.trim() !== source.trim()) throw new Error('The written lyrics could not be verified. The saved audio copy is unchanged.');
+    const record = embeddedRecord(id, track.fileName || track.name, verified.lyrics, verified.ttml)!;
     const current = await readLyrics(id);
     if (lyricRevision(current) !== lyricRevision(before)) throw new Error('Lyrics changed during translation. No audio was overwritten.');
     if (before?.offsetMs !== undefined) record.offsetMs = before.offsetMs;
@@ -400,5 +407,57 @@ if (import.meta.hot) {
     for (const url of coverUrls.values()) URL.revokeObjectURL(url);
     instance = undefined; element = undefined;
     store.dispatch(libraryActions.clear());
+  });
+}
+
+/** Explicit, read-only discovery for older library entries which lack alternates. */
+export async function discoverEmbeddedLyricVariants(id: string): Promise<number> {
+  let formats = 0;
+  const success = await operation('Reading embedded lyric formats...', async () => {
+    const track = store.getState().library.tracks.find(item => item.id === id), audio = audioCopies.get(id);
+    if (!track || !audio || track.unavailable) throw new Error('The saved audio copy is unavailable.');
+    const before = await readLyrics(id);
+    const { lyrics, ttml } = await readAudioTags(new File([audio], track.fileName || track.name, { type: audio.type }), true);
+    const embedded = embeddedRecord(id, track.fileName || track.name, lyrics, ttml);
+    if (!embedded) return;
+    const candidates = [{ format: embedded.document.format, fileName: embedded.fileName, source: embedded.source,
+      document: embedded.document, origin: 'embedded' as const }, ...(embedded.alternates ?? []).map(item => ({ ...item, origin: 'embedded' as const }))];
+    formats = candidates.length;
+    if (!before) { await saveLyrics(embedded, null); return; }
+    const available = new Set([before.document.format, ...(before.alternates ?? []).map(item => item.document.format)]);
+    const discovered = candidates.filter(item => !available.has(item.document.format));
+    if (discovered.length) await saveLyrics({ ...before, alternates: [...(before.alternates ?? []), ...discovered] }, lyricRevision(before));
+  });
+  if (!success) throw new Error(store.getState().library.storageError || 'Embedded lyrics could not be read.');
+  return formats;
+}
+
+export function mergeDuplicateAudio(preview: readonly LocalTrack[], keepId: string) {
+  return operation('Merging confirmed duplicates...', async () => {
+    for (const track of preview) {
+      if (track.id !== keepId && await readStudioDraft(track.id))
+        throw new Error('A duplicate has a Studio draft. Choose it as the retained song or resolve its draft first.');
+    }
+    const result = await mergeDuplicateRecords(preview, keepId, id =>
+      getLocalPlayer().getState().currentId !== id && !studioRecoveries().some(entry => entry.draft.trackId === id));
+    const selected = store.getState().library.selectedId;
+    for (const id of result.removedIds) forgetRemovedTrack(id);
+    const tracks = store.getState().library.tracks.map(track => track.id === keepId ? { ...track, ...result.kept } : track);
+    store.dispatch(libraryActions.restore({ tracks, playlists: result.playlists }));
+    if (selected && result.removedIds.includes(selected)) store.dispatch(libraryActions.selectTrack(keepId));
+    diagnosticLog('info', 'library.duplicates', 'Confirmed duplicate group merged.', { count: result.removedIds.length });
+  });
+}
+
+export function undoDuplicateAudioMerge() {
+  return operation('Restoring the last merged duplicate group...', async () => {
+    const result = await undoDuplicateMerge();
+    const restored = result.items.map(item => {
+      audioCopies.set(item.track.id, item.audio!);
+      return { ...item.track, coverUrl: setCover(item.track.id, item.cover), unavailable: false };
+    });
+    store.dispatch(libraryActions.restore({ tracks: [...store.getState().library.tracks, ...restored], playlists: result.playlists }));
+    if (!contextIds) getLocalPlayer().addTracks(result.items.map(item => ({ id: item.track.id, url: URL.createObjectURL(item.audio!) })));
+    diagnosticLog('info', 'library.duplicates', 'Duplicate merge undone.', { count: restored.length });
   });
 }

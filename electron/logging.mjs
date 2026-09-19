@@ -1,23 +1,29 @@
 import { mkdir, appendFile, rename, unlink, stat, open } from 'node:fs/promises';
 import path from 'node:path';
+import { appendFileSync, mkdirSync, renameSync, statSync, unlinkSync } from 'node:fs';
 import { sanitizeLogEntry } from './log-redaction.mjs';
 
 export class DesktopLogger {
   constructor(dataPath, { maxBytes = 2 * 1024 * 1024, maxFiles = 3, maxQueued = 128 } = {}) {
     this.directory = path.join(dataPath, 'logs'); this.file = path.join(this.directory, 'player.log');
+    this.fatalFile = path.join(this.directory, 'fatal.log');
     this.maxBytes = Math.max(256, Math.floor(maxBytes)); this.maxFiles = Math.max(1, Math.min(10, Math.floor(maxFiles)));
-    this.maxQueued = maxQueued; this.debug = false; this.pending = 0; this.dropped = 0; this.queue = Promise.resolve(); this.recent = []; this.recentBytes = 0;
+    this.maxQueued = maxQueued; this.debug = false; this.level = 'info'; this.pending = 0; this.dropped = 0; this.queue = Promise.resolve(); this.recent = []; this.recentBytes = 0;
   }
   setDebug(value) { if (typeof value !== 'boolean') throw new Error('Invalid debug mode.'); this.debug = value; }
+  setLevel(value) { if (!['debug', 'info', 'warn', 'error', 'fatal'].includes(value)) throw new Error('Invalid log level.'); this.level = value; }
   enqueue(action) { const task = this.queue.catch(() => {}).then(action); this.queue = task.catch(() => {}); return task; }
   write(value) {
+    const severity = { debug: 0, info: 1, warn: 2, error: 3, fatal: 4 };
     if (value?.level === 'debug' && !this.debug) return Promise.resolve();
-    if (this.pending >= this.maxQueued + (['warn', 'error'].includes(value?.level) ? 16 : 0)) { this.dropped++; return Promise.resolve(); }
+    if (!Object.hasOwn(severity, value?.level) || severity[value.level] < severity[this.level]) return Promise.resolve();
+    if (this.pending >= this.maxQueued + (['warn', 'error', 'fatal'].includes(value?.level) ? 16 : 0)) { this.dropped++; return Promise.resolve(); }
     let entry;
     try { entry = sanitizeLogEntry(value); } catch (error) { return Promise.reject(error); }
     this.pending++;
     return this.enqueue(async () => {
       if (entry.level === 'debug' && !this.debug) return;
+      if (severity[entry.level] < severity[this.level]) return;
       await mkdir(this.directory, { recursive: true });
       let line = JSON.stringify(entry) + '\n';
       const limit = Math.min(this.maxBytes, 48 * 1024);
@@ -40,13 +46,33 @@ export class DesktopLogger {
       this.recent.push({ entry, bytes }); this.recentBytes += bytes;
     }).finally(() => { this.pending--; });
   }
+  // Crash monitoring cannot wait for promises. A separate bounded file avoids
+  // racing the ordinary asynchronous rotation and never masks the fatal error.
+  writeFatal(value) {
+    try {
+      const entry = sanitizeLogEntry({ ...value, level: 'fatal' });
+      entry.message = entry.message.slice(0, 8000);
+      if (JSON.stringify(entry).length > 24000) entry.data = { truncated: true };
+      const line = JSON.stringify(entry) + '\n';
+      mkdirSync(this.directory, { recursive: true });
+      let size = 0;
+      try { size = statSync(this.fatalFile).size; } catch (error) { if (error.code !== 'ENOENT') throw error; }
+      if (size + Buffer.byteLength(line) > this.maxBytes) {
+        try { unlinkSync(this.fatalFile + '.1'); } catch (error) { if (error.code !== 'ENOENT') throw error; }
+        renameSync(this.fatalFile, this.fatalFile + '.1');
+      }
+      appendFileSync(this.fatalFile, line, { mode: 0o600 });
+    } catch { /* Diagnostic failure must not replace the original crash. */ }
+  }
   read(maxBytes = 512 * 1024) {
     return this.enqueue(async () => {
       const parts = []; let remaining = Math.max(0, Math.min(1024 * 1024, maxBytes));
-      for (let i = 0; i < this.maxFiles && remaining > 0; i++) {
+      const files = [this.fatalFile, this.fatalFile + '.1', ...Array.from({ length: this.maxFiles }, (_, i) => i ? `${this.file}.${i}` : this.file)];
+      for (const file of files) {
+        if (remaining <= 0) break;
         let handle;
         try {
-          handle = await open(i ? `${this.file}.${i}` : this.file, 'r');
+          handle = await open(file, 'r');
           const { size } = await handle.stat(), start = Math.max(0, size - remaining), buffer = Buffer.alloc(Math.min(size, remaining));
           const { bytesRead } = await handle.read(buffer, 0, buffer.length, start);
           let text = buffer.subarray(0, bytesRead).toString('utf8');
@@ -62,12 +88,14 @@ export class DesktopLogger {
     return this.enqueue(async () => {
       // Exact logger-owned filenames only; never remove a user-selected folder.
       for (let i = 0; i < 10; i++) await unlink(i ? `${this.file}.${i}` : this.file).catch(error => { if (error.code !== 'ENOENT') throw error; });
+      for (const file of [this.fatalFile, this.fatalFile + '.1']) await unlink(file).catch(error => { if (error.code !== 'ENOENT') throw error; });
       this.dropped = 0; this.recent = []; this.recentBytes = 0;
     });
   }
   async info() {
     await this.queue;
     const sizes = await Promise.all(Array.from({ length: this.maxFiles }, (_, i) => stat(i ? `${this.file}.${i}` : this.file).then(s => s.size).catch(() => 0)));
+    sizes.push(...await Promise.all([this.fatalFile, this.fatalFile + '.1'].map(file => stat(file).then(info => info.size).catch(() => 0))));
     return { bytes: sizes.reduce((a, b) => a + b, 0), maxBytes: this.maxBytes, maxFiles: this.maxFiles, pending: this.pending, dropped: this.dropped, recent: this.recent.slice(-30).map(item => item.entry) };
   }
 }

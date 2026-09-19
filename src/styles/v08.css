@@ -10,11 +10,21 @@ input[type=checkbox]:not(.ant-checkbox-input):disabled { opacity: .4; cursor: no
 .ant-checkbox .ant-checkbox-inner { width: 19px; height: 19px; border-radius: 6px; border-color: var(--control-border); }
 .ant-checkbox-checked .ant-checkbox-inner { background: var(--control-accent); border-color: var(--control-accent); }.ant-checkbox-inner::after { border-color: var(--control-check) !important; }
 body { font-weight: var(--app-weight, 400); font-stretch: var(--app-stretch, 100%); letter-spacing: var(--app-spacing, 0); font-style: var(--app-style, normal); }
+/* Some installed fonts draw ink outside the em box; keep the original fixed-height
+   UI intact while giving that ink a small paint margin instead of biting it off. */
+.offline-app :is(.offline-track-name strong, .offline-track-name small, .offline-song-details p, .offline-saved-tracks strong, .offline-saved-tracks small, .offline-album-card .playlist-card-info p, .offline-album-group span, .offline-page-header .playlist-header, .offline-page-header p, .lyrics-header h1, .lyrics-header p, .library-card strong, .library-card small, .offline-queue-list span) {
+  overflow: hidden;
+  line-height: 1.5;
+  padding-block: .16em;
+  padding-inline: .1em;
+  margin-block: -.16em;
+  margin-inline: -.1em;
+}
 .lyric-text, .studio-preview-text { font-weight: var(--lyrics-weight, 800) !important; font-stretch: var(--lyrics-stretch, 100%) !important; letter-spacing: var(--lyrics-spacing, 0) !important; font-style: var(--lyrics-style, normal) !important; font-variation-settings: 'wght' var(--lyrics-weight, 800); }
 .lyrics-reader .lyric-translation, .studio-preview-annotation[data-kind=translation] { font-size: var(--lyric-translation-size, var(--translation-font-size, 20px)) !important; line-height: 1.45 !important; font-weight: 500; }
 .lyrics-reader[data-performer-alignment=false] .lyric-line-button, .lyrics-reader[data-performer-alignment=false] .lyric-text, .lyrics-reader[data-performer-alignment=false] .lyric-annotation { text-align: start !important; margin-inline: 0 !important; }
 .lyrics-reader[data-performer-alignment=true] .lyric-secondary .lyric-line-button, .lyrics-reader[data-performer-alignment=true] .lyric-secondary .lyric-text, .lyrics-reader[data-performer-alignment=true] .lyric-secondary .lyric-annotation { text-align: end !important; }
-.studio-preview-panel[data-word-by-word=false] [data-preview-word] { background: none !important; -webkit-text-fill-color: currentColor !important; }
+.studio-preview-panel[data-word-by-word=false] [data-preview-word] { background-image: linear-gradient(to right, currentColor, currentColor) !important; }
 .lyric-display-controls { display: grid; gap: 14px; padding: 4px 0; }.lyric-display-controls label { display: flex; align-items: center; min-height: 28px; cursor: pointer; }
 .settings-window { max-width: calc(100vw - 24px); }
 .settings-window .ant-modal-content { padding: 0; }
@@ -117,16 +127,20 @@ body :is(input, textarea, [contenteditable]:not([contenteditable=false])), body 
 .studio-page .studio-preview-line[data-background][data-vocal-side=right] { padding-left: 0; padding-right: 16px; }
 .studio-preview-line :is(.studio-preview-seek, .studio-preview-text, .studio-preview-annotation) { width: 100%; margin-inline: 0; padding-inline: 0; overflow-wrap: anywhere; }
 
-/* A soft, alpha-scaled halo has no threshold shadow or brightness jump. */
+/* Keep a single clean glyph silhouette; progress supplies the highlight. */
 .lyric-word, .lyric-word[data-sustained=true], [data-preview-word] {
   filter: none !important;
-  text-shadow: 0 0 .11em rgb(255 255 255 / calc(var(--sustain-glow, 0) * .25)), 0 0 .32em rgb(255 255 255 / calc(var(--sustain-glow, 0) * .09));
+  text-shadow: none !important;
 }
-.lyric-row[data-active] .lyric-word { background-image: linear-gradient(to right, var(--lyrics-highlight) max(0%, calc(var(--word-progress) - 2%)), var(--lyrics-muted) min(100%, calc(var(--word-progress) + 2%))); }
-.lyric-row[data-active] .lyric-word[data-word-progress="0.0000"] { background: none; color: var(--lyrics-muted); }
-.lyric-row[data-active] .lyric-word[data-rapid] { background: none !important; color: color-mix(in srgb, var(--lyrics-highlight) calc(var(--word-visual, 0) * 100%), var(--lyrics-muted)); }
-.studio-preview-line[data-active] [data-preview-word][data-rapid][data-timed] { background: none !important; -webkit-text-fill-color: currentColor !important; color: color-mix(in srgb, var(--studio-text, #fff) calc(var(--word-visual, 0) * 100%), var(--studio-muted, #888)); }
-.lyrics-lines .lyric-dot { width: clamp(20px, .55em, 30px); height: clamp(20px, .55em, 30px); min-width: 20px; min-height: 20px; background: currentColor; opacity: .22; transform: scale(var(--dot-scale, 1)); filter: none; animation: none !important; transition: opacity 160ms ease; }
+.lyric-word[data-rapid] {
+  --rapid-ink: color-mix(in srgb, var(--word-ink-highlight) calc(var(--word-visual, 0) * 100%), var(--word-ink-muted));
+  background-image: linear-gradient(to right, var(--rapid-ink), var(--rapid-ink));
+}
+.studio-page .studio-preview-line [data-preview-word][data-rapid][data-timed] {
+  --rapid-ink: color-mix(in srgb, var(--studio-text, #fff) calc(var(--word-visual, 0) * 100%), var(--studio-muted, #888));
+  background-image: linear-gradient(to right, var(--rapid-ink), var(--rapid-ink));
+}
+.lyrics-lines .lyric-dot { width: clamp(20px, .55em, 30px); height: clamp(20px, .55em, 30px); min-width: 20px; min-height: 20px; border-radius: 50%; background: currentColor; opacity: .22; transform: scale(var(--dot-scale, 1)); filter: none; animation: none !important; transition: opacity 160ms ease; }
 .lyrics-lines .lyric-dot[data-lit=true] { opacity: 1; }
 .lyric-dots-content button { gap: 16px; min-width: 124px; min-height: 58px; padding: 12px 8px; }
 
@@ -168,3 +182,20 @@ body :is(input, textarea, [contenteditable]:not([contenteditable=false])), body 
 body .ant-modal .ant-modal-content { background: var(--popup-surface) !important; color: var(--popup-text); }
 body .ant-modal .ant-modal-header { background: transparent !important; }
 body .ant-modal .ant-modal-close-x { color: var(--popup-muted); }
+
+/* Font ink can exceed its advance box, especially for italic and CJK fonts. */
+.offline-app :is(.lyric-text, .lyric-annotation, .studio-preview-text, .studio-preview-annotation) {
+  overflow: visible; text-shadow: none !important; -webkit-text-stroke: 0;
+}
+.studio-page .studio-preview-line [data-preview-word] {
+  padding: .24em .08em .28em; margin-inline: -.08em;
+  box-decoration-break: clone; -webkit-box-decoration-break: clone;
+  border-bottom: 0; text-shadow: none !important; -webkit-text-stroke: 0;
+}
+.offline-app :is(button, input, select, textarea, h1, h2, h3, strong, small),
+.settings-window { text-shadow: none; }
+.lyrics-reader .lyric-popout-content, .studio-preview-line .studio-popout-content {
+  padding-block: .12em; margin-block: -.12em;
+}
+
+.lyric-text, .studio-preview-text { font-kerning: normal; font-optical-sizing: auto; }

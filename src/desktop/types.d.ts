@@ -30,7 +30,7 @@ declare global {
       getConfig<T>(key: string): Promise<T | undefined>;
       setConfig(key: string, value: unknown): Promise<void>;
       configPath(): Promise<string>;
-      writeLog(entry: { level: 'debug' | 'info' | 'warn' | 'error'; scope: string; message: string; data?: unknown }): Promise<void>;
+      writeLog(entry: { level: 'debug' | 'info' | 'warn' | 'error' | 'fatal'; scope: string; message: string; data?: unknown }): Promise<void>;
       readLog(): Promise<string>;
       clearLogs(): Promise<void>;
       copyDebugInfo?(report: string): Promise<void>;

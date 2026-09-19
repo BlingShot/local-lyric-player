@@ -1,14 +1,25 @@
 import { useSyncExternalStore } from 'react';
 import { version } from '../../package.json';
 import { redactLogText, redactDiagnostic, sanitizeLogEntry, serializeDebugReport } from '../../electron/log-redaction.mjs';
-import { configPreference } from './config';
 
 export type DebugSection = 'live' | 'lyrics' | 'audio' | 'ttml' | 'performance';
-export type LogLevel = 'debug' | 'info' | 'warn' | 'error';
+export type LogLevel = 'debug' | 'info' | 'warn' | 'error' | 'fatal';
 export interface DiagnosticEntry { time: string; level: LogLevel; scope: string; message: string; data?: unknown }
+const LOG_SEVERITY: Record<LogLevel, number> = { debug: 0, info: 1, warn: 2, error: 3, fatal: 4 };
+const LOG_LEVELS = ['debug', 'info', 'warn', 'error', 'fatal'] as const;
+const validLogLevel = (value: unknown): LogLevel => typeof value === 'string' && (LOG_LEVELS as readonly string[]).includes(value) ? value as LogLevel : 'info';
 const key = 'local-music-debug';
-const read = () => { try { return localStorage.getItem(key) === 'true'; } catch { return false; } };
-let state = { debug: read(), error: '' }, revision = 0, initialized = false;
+const read = () => {
+  try {
+    const saved = localStorage.getItem(key);
+    if (saved === 'true' || saved === 'false') return { debug: saved === 'true', level: 'info' as LogLevel };
+    const parsed = JSON.parse(saved || 'null') as { debug?: boolean; level?: LogLevel } | null;
+    return { debug: parsed?.debug === true, level: validLogLevel(parsed?.level) };
+  } catch { return { debug: false, level: 'info' as LogLevel }; }
+};
+interface DiagnosticPreferences { debug: boolean; level: LogLevel }
+const initialPreferences = read();
+let state = { ...initialPreferences, ready: false, saving: false, saved: false, error: '' }, revision = 0, initialized = false;
 const listeners = new Set<() => void>(), telemetryListeners = new Set<() => void>();
 const sources = new Map<DebugSection, () => unknown>(), entries: DiagnosticEntry[] = [], sizes: number[] = [];
 let retainedBytes = 0, dropped = 0, timer: ReturnType<typeof setInterval> | undefined, raf = 0, frames = 0, frameAt = 0, generation = 0;
@@ -25,6 +36,7 @@ export function diagnosticState(section: DebugSection, value: unknown) { if (sta
 export function diagnosticMetric(name: string, value: unknown) { if (state.debug) metrics = { ...metrics, [name]: redactDiagnostic(value) }; }
 export function diagnosticLog(level: LogLevel, scope: string, message: unknown, data?: unknown) {
   if (level === 'debug' && !state.debug) return;
+  if (LOG_SEVERITY[level] < LOG_SEVERITY[state.level]) return;
   try {
     const entry = sanitizeLogEntry({ level, scope, message: redactLogText(message), data: data ?? (message instanceof Error ? { error: message } : undefined) }) as DiagnosticEntry;
     let text = JSON.stringify(entry);
@@ -76,26 +88,78 @@ function startCapture() {
 }
 export async function initializeDiagnostics() {
   if (initialized) return; initialized = true;
-  window.addEventListener('error', event => diagnosticLog('error', 'renderer', event.error || event.message));
+  window.addEventListener('error', event => diagnosticLog('fatal', 'renderer', event.error || event.message));
   window.addEventListener('unhandledrejection', event => diagnosticLog('error', 'promise', event.reason));
   document.addEventListener('securitypolicyviolation', event => diagnosticLog('warn', 'security-policy', 'A resource was blocked by Content Security Policy.', { directive: event.violatedDirective, blockedURI: event.blockedURI }));
   window.addEventListener('pagehide', stopCapture);
   window.addEventListener('pageshow', () => { if (state.debug) startCapture(); });
-  const request = revision, value = await configPreference('diagnostics', { debug: state.debug });
-  if (request === revision) { state = { ...state, debug: value?.debug === true }; notify(); }
+  const request = revision;
+  // Initialization shares the write queue, so a slow startup read cannot restore
+  // old values over a later user change.
+  const task = writes.catch(() => {}).then(async () => {
+    const desktop = window.localMusicDesktop;
+    const fallback: DiagnosticPreferences = { debug: state.debug, level: state.level };
+    const stored = desktop ? await desktop.getConfig<Partial<DiagnosticPreferences>>('diagnostics') : undefined;
+    if (request !== revision) return;
+    if (stored !== undefined && (!stored || typeof stored.debug !== 'boolean' ||
+        stored.level !== undefined && !(LOG_LEVELS as readonly unknown[]).includes(stored.level))) {
+      throw new Error('Saved debug settings are invalid. They have not been overwritten.');
+    }
+    const preference: DiagnosticPreferences = stored
+      ? { debug: stored.debug === true, level: validLogLevel(stored.level) } : fallback;
+    if (desktop && (stored === undefined || stored.level === undefined)) await desktop.setConfig('diagnostics', preference);
+    else if (!desktop) localStorage.setItem(key, JSON.stringify(preference));
+    if (request === revision) {
+      state = { ...state, ...preference, ready: true, saving: false, saved: true, error: '' }; notify();
+    }
+  });
+  writes = task;
+  try { await task; }
+  catch (error) {
+    if (request === revision) {
+      state = { ...state, ready: true, saving: false, saved: false,
+        error: error instanceof Error ? error.message : 'Debug settings could not be restored.' }; notify();
+    }
+  }
   if (state.debug) startCapture();
   diagnosticLog('info', 'startup', 'Renderer initialized.', { version });
 }
 let writes = Promise.resolve();
-export async function setDebugMode(debug: boolean) {
-  const request = ++revision; state = { debug, error: '' };
-  if (debug) startCapture(); else stopCapture(); notify();
-  writes = writes.catch(() => {}).then(async () => {
-    if (window.localMusicDesktop) await window.localMusicDesktop.setConfig('diagnostics', { debug });
-    else localStorage.setItem(key, String(debug));
+
+async function persistDiagnostics(preference: DiagnosticPreferences, request: number) {
+  const task = writes.catch(() => {}).then(async () => {
+    if (window.localMusicDesktop) await window.localMusicDesktop.setConfig('diagnostics', preference);
+    else localStorage.setItem(key, JSON.stringify(preference));
   });
-  try { await writes; diagnosticLog('info', 'diagnostics', `Debug mode ${debug ? 'enabled' : 'disabled'}.`); }
-  catch { if (request === revision) { state = { ...state, error: 'Debug setting could not be saved.' }; notify(); } }
+  writes = task;
+  try {
+    await task;
+    if (request === revision) { state = { ...state, ready: true, saving: false, saved: true, error: '' }; notify(); }
+    diagnosticLog('info', 'diagnostics', 'Debug preferences saved.', preference);
+  } catch (error) {
+    if (request === revision) {
+      state = { ...state, ready: true, saving: false, saved: false,
+        error: `Debug settings were not saved. ${error instanceof Error ? error.message : 'Check storage permissions and try again.'}` };
+      notify();
+    }
+  }
+}
+export async function setDebugMode(debug: boolean) {
+  const request = ++revision;
+  state = { ...state, debug, saving: true, saved: false, error: '' };
+  if (debug) startCapture(); else stopCapture(); notify();
+  await persistDiagnostics({ debug, level: state.level }, request);
+}
+export async function setLogLevel(level: LogLevel) {
+  const request = ++revision;
+  state = { ...state, level: validLogLevel(level), saving: true, saved: false, error: '' }; notify();
+  await persistDiagnostics({ debug: state.debug, level: state.level }, request);
+}
+export async function retryDiagnosticSettings() {
+  const request = ++revision;
+  const preference = { debug: state.debug, level: state.level };
+  state = { ...state, saving: true, saved: false, error: '' }; notify();
+  await persistDiagnostics(preference, request);
 }
 export async function diagnosticText() {
   if (window.localMusicDesktop?.readLog) { try { return (await window.localMusicDesktop.readLog()).split('\n').map(line => { try { return JSON.stringify(redactDiagnostic(JSON.parse(line))); } catch { return redactLogText(line); } }).join('\n'); } catch { /* Fall back to session logs. */ } }
@@ -115,6 +179,6 @@ export async function debugReport() {
     environment: { version, userAgent: navigator.userAgent, platform: navigator.platform, language: navigator.language, online: navigator.onLine, desktop },
     currentSong: current.sections.live, audio: current.sections.audio, lyrics: current.sections.lyrics ?? { status: 'Debug capture is disabled.' },
     amllTtml: current.sections.ttml ?? { status: 'No AMLL trace captured in this session.' }, performance: { ...current.metrics, ...Object(current.sections.performance), retainedLogBytes: retainedBytes, dropped },
-    recentErrors: entries.filter(entry => entry.level === 'error' || entry.level === 'warn').slice(-30), recentLogs: entries.slice(-100), recentDesktopLogs: desktopLogs };
+    recentErrors: entries.filter(entry => entry.level === 'error' || entry.level === 'warn' || entry.level === 'fatal').slice(-30), recentLogs: entries.slice(-100), recentDesktopLogs: desktopLogs };
   return serializeDebugReport(report);
 }

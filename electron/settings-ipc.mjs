@@ -30,7 +30,14 @@ export function registerSettingsIpc(win, config, folders, devUrl, logger) {
     win.webContents.setZoomFactor(factor); return factor;
   });
   handle('desktop-config:get', key => { if (!allowed.has(key)) throw new Error('Unknown setting.'); return config.get(key); });
-  handle('desktop-config:set', async (key, value) => { if (!allowed.has(key)) throw new Error('Unknown setting.'); if (key === 'diagnostics') { if (!value || typeof value.debug !== 'boolean' || Object.keys(value).some(key => key !== 'debug')) throw new Error('Invalid debug settings.'); logger?.setDebug(value.debug); } await config.set(key, value); });
+  handle('desktop-config:set', async (key, value) => {
+    if (!allowed.has(key)) throw new Error('Unknown setting.');
+    if (key === 'diagnostics' && (!value || typeof value.debug !== 'boolean' || !['debug', 'info', 'warn', 'error', 'fatal'].includes(value.level)))
+      throw new Error('Invalid debug settings.');
+    await config.set(key, value);
+    // The running logger only adopts settings after the atomic disk write succeeds.
+    if (key === 'diagnostics') { logger?.setDebug(value.debug); logger?.setLevel(value.level); }
+  });
   handle('desktop-log:write', entry => logger?.write(entry));
   handle('desktop-log:copy-report', text => clipboard.writeText(prepareClipboardReport(text)));
   handle('desktop-log:read', () => logger?.read() ?? '');

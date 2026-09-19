@@ -39,7 +39,7 @@ export function redactDiagnostic(value, depth = 0, seen = new WeakSet(), budget 
   return result;
 }
 export function sanitizeLogEntry(value) {
-  if (!value || !['debug', 'info', 'warn', 'error'].includes(value.level) || typeof value.scope !== 'string' ||
+  if (!value || !['debug', 'info', 'warn', 'error', 'fatal'].includes(value.level) || typeof value.scope !== 'string' ||
       !/^[\w.-]{1,48}$/.test(value.scope) || typeof value.message !== 'string' || value.message.length > 32768) throw new Error('Invalid diagnostic entry.');
   return { time: new Date().toISOString(), level: value.level, scope: value.scope, message: redactLogText(value.message),
     ...(value.data !== undefined ? { data: redactDiagnostic(value.data) } : {}) };

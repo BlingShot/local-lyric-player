@@ -39,21 +39,7 @@
 .offline-app[data-lyrics-fullscreen] .lyrics-heading h1 { font-size: 17px; font-weight: 700; }
 .offline-app[data-lyrics-fullscreen] .lyrics-heading p { font-size: 12px; opacity: .8; }
 .offline-app .lyrics-page { position: relative; isolation: isolate; }
-.offline-app .lyrics-page > :not(.lyric-backdrop):not(.lyric-music-pulse) { position: relative; z-index: 1; }
-.offline-app .lyrics-page > .lyric-music-pulse {
-  /* Keep the reactive wash larger than the viewport and fade its perimeter.
-     Moving the gradient centres instead of translating a rectangular compositing
-     layer prevents the bright square/tile edge that could flash on some GPUs. */
-  position: absolute; inset: -32%; z-index: 0; border-radius: 50%; pointer-events: none;
-  background:
-    radial-gradient(ellipse at calc(27% + var(--music-x, 0%)) calc(38% + var(--music-y, 0%)), #fff 0%, #ffffff70 30%, transparent 68%),
-    radial-gradient(ellipse at calc(80% - var(--music-x, 0%)) calc(74% - var(--music-y, 0%)), #ffffff60 0%, transparent 60%);
-  -webkit-mask-image: radial-gradient(ellipse at center, #000 0 55%, #000d 66%, transparent 84%);
-  mask-image: radial-gradient(ellipse at center, #000 0 55%, #000d 66%, transparent 84%);
-  opacity: calc(var(--music-pulse, 0) * .16);
-  transform: scale(calc(1 + var(--music-pulse, 0) * .045));
-  transform-origin: center;
-}
+.offline-app .lyrics-page > :not(.lyric-backdrop) { position: relative; z-index: 1; }
 @media (max-width: 767px) {
   .offline-app[data-lyrics-fullscreen] .lyrics-heading-cover { width: 44px; height: 44px; }
   .lyrics-header .lyrics-heading { gap: 10px; }
@@ -62,7 +48,6 @@
   .offline-app[data-lyrics-fullscreen] :is(.lyrics-header-actions, .offline-playing-bar, .lyrics-resume, .lyrics-remote-notice) {
     transition: none !important; animation: none !important;
   }
-  .offline-app .lyric-music-pulse { display: none; }
 }
 
 /* The cover is already blurred. Avoid a second moving backdrop sampling pass. */

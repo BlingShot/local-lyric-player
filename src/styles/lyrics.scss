@@ -8,6 +8,10 @@
   background: var(--lyrics-background); border-radius: inherit; container-type: inline-size; transition: background-color 650ms ease;
 }
 .lyrics-header-actions { flex-shrink: 0; display: flex; align-items: center; gap: 12px; position: relative; }
+.embedded-format-switch { display: inline-flex; align-items: center; gap: 4px; padding: 3px; border: 1px solid #ffffff40; border-radius: 999px; }
+.embedded-format-switch button { border: 0; border-radius: 999px; padding: 6px 12px; background: transparent; color: #ffffffa8; font-size: 12px !important; }
+.embedded-format-switch button[aria-pressed=true] { background: #ffffff; color: #121212; }
+.lyric-display-controls label:has(input:disabled) { opacity: .45; cursor: default; }
 .lyrics-fullscreen-button { color: #fff; }
 .lyrics-timing-button { color: #fff; }
 .lyrics-timing-controls { width: 260px; }
@@ -45,10 +49,22 @@
 }
 .lyric-text { display: block; font-size: inherit; line-height: 1.5; padding: .12em .06em .2em; overflow-wrap: anywhere; white-space: pre-wrap; }
 .lyric-line-button:hover .lyric-text, .lyric-line-button:focus-visible .lyric-text {
-  text-decoration-line: underline; text-decoration-thickness: .055em; text-underline-offset: .13em; text-decoration-skip-ink: auto;
+  text-decoration-line: underline; text-decoration-thickness: .07em; text-underline-offset: .045em; text-decoration-skip-ink: auto;
 }
-.lyric-word { display: inline; background: linear-gradient(to right, var(--lyrics-highlight) var(--word-progress), var(--lyrics-muted) var(--word-progress)); color: transparent; background-clip: text; -webkit-background-clip: text; padding-block: .12em .2em; box-decoration-break: clone; }
-.lyric-row:not([data-active]) .lyric-word { background: none; color: inherit; }
+/* One glyph-painting path for future, active and past words. Switching between
+   normal text and background-clipped text changes antialiasing at the first tick. */
+.lyric-word {
+  --word-ink-highlight: var(--lyrics-highlight); --word-ink-muted: var(--lyrics-muted);
+  display: inline; color: inherit; -webkit-text-fill-color: transparent; -webkit-text-stroke: 0;
+  background-image: linear-gradient(to right,
+    var(--word-ink-highlight) max(0%, calc(var(--word-progress, 0%) - 2%)),
+    var(--word-ink-muted) min(100%, calc(var(--word-progress, 0%) + 2%)));
+  background-clip: text; -webkit-background-clip: text;
+  padding: .24em .08em .28em; margin-inline: -.08em;
+  box-decoration-break: clone; -webkit-box-decoration-break: clone;
+  transform: none; transition: none;
+}
+.lyric-row:not([data-active]) .lyric-word { --word-ink-highlight: currentColor; --word-ink-muted: currentColor; }
 .lyric-row[data-past] .lyric-line-button { color: var(--lyrics-past); }
 .lyric-row[data-past] .lyric-line-button:hover, .lyric-row[data-past] .lyric-line-button:focus-visible { color: #ffffffb8; }
 .lyric-row[data-past] .lyric-performer, .lyric-row[data-past] .lyric-annotation { color: #ffffff60; }

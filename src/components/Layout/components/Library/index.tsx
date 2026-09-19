@@ -40,24 +40,17 @@ export function Library({ drawer = false, compact = false }: { drawer?: boolean;
           onClick={() => dispatch(drawer ? uiActions.closeLibraryDrawer() : uiActions.toggleLibrary())}>
           {collapsed ? <LibraryCollapsedIcon /> : <LibraryIcon />}
         </button>
-        {!collapsed && <span className='Navigation-button'>{t("Your library")}</span>}
+        <span className='Navigation-button' aria-hidden={collapsed || undefined}>{t("Your library")}</span>
         <ImportButton compact />
       </div>
-      {collapsed && <div className='offline-collapsed-tracks' aria-label={t("Saved library covers")}>
-        {visible.map(track => <TrackContextMenu key={track.id} trackId={track.id}><button aria-label={t("Play saved track {0}", track.name)}
-          title={`${track.name}${track.artist ? ` · ${track.artist}` : ''}${view === 'history' && playedTime(track.lastPlayedAt) ? `\nLast played: ${playedTime(track.lastPlayedAt)!.full}` : ''}`}
-          aria-current={currentId === track.id ? 'true' : undefined} disabled={track.unavailable}
-          {...trackActivation(track.id, () => playLocalTrack(track.id))}>
-          <img src={trackCover(track)} width={48} height={48} alt='' />
-        </button></TrackContextMenu>)}
-      </div>}
-      {!collapsed && <div className='offline-library-body'>
+      <div className='offline-library-body'>
         {!!count && <>
-          <div className='offline-library-view'><span className='offline-sr-only'>{t("Library view")}</span>
+          <div className='offline-library-view' inert={collapsed || undefined} aria-hidden={collapsed || undefined}><span className='offline-sr-only'>{t("Library view")}</span>
             <AppSelect label={t("Library view")} value={view} onChange={setView} options={[{ value: 'saved', label: t("Saved tracks") }, { value: 'history', label: t("Recently played") }]} />
           </div>
           <ul className='offline-saved-tracks' aria-label={view === 'history' ? t("Recently played tracks") : t("Saved library tracks")}>
             {visible.map(track => <li key={track.id}><TrackContextMenu trackId={track.id}><button className='library-card' aria-label={t("Play saved track {0}", track.name)}
+              title={`${track.name}${track.artist ? ` / ${track.artist}` : ''}`}
               aria-current={currentId === track.id ? 'true' : undefined} disabled={track.unavailable}
               {...trackActivation(track.id, () => { playLocalTrack(track.id); if (drawer) dispatch(uiActions.closeLibraryDrawer()); })}>
               <img src={trackCover(track)} width={48} height={48} alt='' />
@@ -72,7 +65,7 @@ export function Library({ drawer = false, compact = false }: { drawer?: boolean;
           <p>{t("Import music from your device to start your collection.")}</p>
           <ImportButton />
         </div>}
-      </div>}
+      </div>
     </aside>
   );
 }

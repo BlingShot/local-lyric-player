@@ -40,7 +40,13 @@ export class DesktopConfig {
     const task = this.queue.catch(() => {}).then(async () => {
       const data = await this.load();
       let saved = value;
-      if (section === 'diagnostics' && (!value || typeof value.debug !== 'boolean' || Object.keys(value).some(key => key !== 'debug'))) throw new Error('Invalid debug settings.');
+      if (section === 'diagnostics') {
+        if (!value || typeof value.debug !== 'boolean' || Object.keys(value).some(key => !['debug', 'level'].includes(key)) ||
+            value.level !== undefined && !['debug', 'info', 'warn', 'error', 'fatal'].includes(value.level))
+          throw new Error('Invalid debug settings.');
+        // Upgrade the old debug-only preference without losing its enabled state.
+        saved = { debug: value.debug, level: value.level ?? 'info' };
+      }
       if (section === 'spotify') {
         if (!value || JSON.stringify(value).length > 16000) throw new Error('Invalid Spotify session.');
         if (value.refreshToken && !this.crypto.isEncryptionAvailable()) throw new Error('Windows credential encryption is unavailable.');

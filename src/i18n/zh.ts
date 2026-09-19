@@ -789,6 +789,12 @@ Installed fonts could not be read. Allow local font access or choose a font file
 Choose a valid TTF, OTF, WOFF or WOFF2 font under 32 MB.|请选择不超过 32 MB 的有效 TTF、OTF、WOFF 或 WOFF2 字体文件。
 Font could not be loaded or saved. Choose another local font.|字体无法加载或保存，请重新选择有地字体。
 Saved font is unavailable. Choose it again or use the system default.|已保存的字体不可用，请重新选择或恢复系统默认。
+Application Chinese font|应用中文字体
+Lyric Chinese font|歌词中文字体
+Embedded lyric format|内嵌歌词格式
+Log level|日志等级
+Recorded log level|记录的日志等级
+Logs are recorded at the selected level and above. Debug data is shown directly on the app, player, and lyric surfaces. Logs stay on this device and sensitive values are redacted.|日志按所选等级及以上记录。调试数据会直接显示在应用、播放器和歌词界面中。日志仅保留在本机，敏感信息会被脱敏。
 `;
 
 export const zh: Record<string, string> = Object.fromEntries(pairs.trim().split('\n').map(line => { const at = line.indexOf('|'); return [line.slice(0, at), line.slice(at + 1)]; }));

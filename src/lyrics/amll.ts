@@ -63,7 +63,7 @@ export async function resolveAmll(track: LocalTrack, signal: AbortSignal, onStat
   try {
     const before = await readLyrics(track.id); fallback = before?.origin === 'embedded' ? 'Embedded' : before?.document.format || 'none';
     trace.step('Cache', before ? 'saved-lyrics-hit' : 'saved-lyrics-miss', { format: before?.document.format, origin: before?.origin });
-    if (before?.document.format === 'ttml') { trace.step('Apply', 'keep-existing-ttml', { origin: before.origin }); trace.finish('cached'); return; }
+    if (before?.document.format === 'ttml' || before?.alternates?.some(variant => variant.document.format === 'ttml')) { trace.step('Apply', 'keep-existing-ttml', { origin: before.origin }); trace.finish('cached'); return; }
     let match: { id: string; isrc: string } | null = null;
     const desktop = window.localMusicDesktop; let spotifyError = false;
     trace.step('ISRC', 'start');
@@ -138,6 +138,8 @@ export async function resolveAmll(track: LocalTrack, signal: AbortSignal, onStat
     diagnosticMetric('ttmlParseMs', performance.now() - started); trace.step('Parse', 'complete', { lines: document.lines.length, timing: document.timing, notices: document.notices });
     signal.throwIfAborted(); trace.step('Cache', 'save-start');
     await saveLyrics({ trackId: track.id, fileName, source, document, origin: 'amll', parserVersion: LYRICS_PARSER_VERSION, savedAt: Date.now(), offsetMs: before?.offsetMs,
+      alternates: before ? [{ format: before.document.format, fileName: before.fileName, source: before.source,
+        document: before.document, origin: before.origin, offsetMs: before.offsetMs }, ...(before.alternates ?? [])] : [],
       remote: { isrc: match?.isrc || '', spotifyId: match?.id || '', authors: Array.isArray(data.authorUsernames) ? data.authorUsernames.filter(name => typeof name === 'string').slice(0, 50) : [] } }, lyricRevision(before));
     trace.step('Cache', 'saved'); trace.step('Apply', 'ttml', { fileName }); trace.step('Fallback', 'not-needed'); trace.finish('applied'); status('');
   } catch (error) {

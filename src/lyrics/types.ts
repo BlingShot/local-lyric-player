@@ -19,6 +19,7 @@ export interface LyricDocument {
   agents: Record<string, string>;
   notices: string[];
 }
+export interface EmbeddedLyricVariant { origin?: 'file' | 'embedded' | 'amll'; offsetMs?: number; format: 'lrc' | 'ttml'; fileName: string; source: string; document: LyricDocument }
 export interface SavedLyrics {
   revision?: string;
   trackId: string;
@@ -30,6 +31,8 @@ export interface SavedLyrics {
   origin?: 'file' | 'embedded' | 'amll';
   remote?: { isrc: string; spotifyId: string; authors: string[] };
   offsetMs?: number;
+  /** Other embedded formats discovered in the same audio file (LRC/TTML). */
+  alternates?: EmbeddedLyricVariant[];
 }
 export class LyricsError extends Error {
   constructor(message: string) { super(message); this.name = 'LyricsError'; }

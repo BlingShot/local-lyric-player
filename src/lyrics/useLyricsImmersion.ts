@@ -2,7 +2,7 @@ import { useEffect } from 'react';
 import { useAppDispatch } from '../store/store';
 import { uiActions } from '../store/slices/offlineUi';
 
-const idleMs = 10000;
+const idleMs = 3000;
 export function useLyricsImmersion(enabled: boolean, blocked: boolean) {
   const dispatch = useAppDispatch();
   useEffect(() => {
@@ -12,9 +12,8 @@ export function useLyricsImmersion(enabled: boolean, blocked: boolean) {
     let timer: ReturnType<typeof setTimeout> | undefined;
     let pointer: { x: number; y: number } | undefined;
     const interactionOpen = () => {
-      const editing = document.activeElement instanceof Element &&
-        document.activeElement.matches('input, textarea, select, [contenteditable=true], [role=slider]');
-      return editing || [...document.querySelectorAll<HTMLElement>('[role=dialog], [role=menu], .ant-dropdown:not(.ant-dropdown-hidden)')]
+      // Keyboard focus alone must not postpone mouse-idle immersion.
+      return [...document.querySelectorAll<HTMLElement>('[role=dialog], [role=menu], .ant-dropdown:not(.ant-dropdown-hidden)')]
         .some(element => element.getAttribute('aria-hidden') !== 'true' && element.getClientRects().length > 0);
     };
     function arm() {
@@ -41,14 +40,12 @@ export function useLyricsImmersion(enabled: boolean, blocked: boolean) {
     document.addEventListener('pointermove', move, { passive: true });
     document.addEventListener('pointerdown', wake, { passive: true });
     document.addEventListener('wheel', wake, { passive: true });
-    document.addEventListener('keydown', wake);
     document.addEventListener('visibilitychange', wake);
     return () => {
       clearTimeout(timer);
       document.removeEventListener('pointermove', move);
       document.removeEventListener('pointerdown', wake);
       document.removeEventListener('wheel', wake);
-      document.removeEventListener('keydown', wake);
       document.removeEventListener('visibilitychange', wake);
       dispatch(uiActions.setLyricsImmersive(false));
     };

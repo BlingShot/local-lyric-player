@@ -1,18 +1,28 @@
 import { useSyncExternalStore } from 'react';
 import { openLibraryDatabase } from '../library/database';
 
-export type FontTarget = 'app' | 'lyrics';
+export type FontTarget = 'app' | 'app-cjk' | 'lyrics' | 'lyrics-cjk';
 export type LocalFont = { kind: 'system' } | { kind: 'installed'; family: string } | { kind: 'file'; name: string; bytes: Uint8Array };
-type FontState = { label: string; kind: LocalFont['kind']; family: string; error: string; busy: boolean };
+type FontState = { label: string; kind: LocalFont['kind']; family: string; name: string; error: string; busy: boolean };
 const fallback = 'system-ui, "Microsoft YaHei", sans-serif';
-const initial = (): FontState => ({ label: 'System default', kind: 'system', family: fallback, error: '', busy: false });
-let state = { app: initial(), lyrics: initial() };
+const initial = (): FontState => ({ label: 'System default', kind: 'system', family: fallback, name: 'system-ui', error: '', busy: false });
+let state: Record<FontTarget, FontState> = { app: initial(), 'app-cjk': initial(), lyrics: initial(), 'lyrics-cjk': initial() };
 const listeners = new Set<() => void>(), faces: Partial<Record<FontTarget, FontFace>> = {};
-const revisions = { app: 0, lyrics: 0 };
+const revisions: Record<FontTarget, number> = { app: 0, 'app-cjk': 0, lyrics: 0, 'lyrics-cjk': 0 };
 let faceId = 0;
+
+/** Latin and CJK fonts are selected separately so a Western font never
+ *  forces its (often missing or ugly) CJK fallback, and vice versa. */
+const fontStack = (latin: FontState, cjk: FontState) => {
+  const parts = [latin.kind === 'system' ? 'system-ui' : latin.name];
+  if (cjk.kind !== 'system') parts.push(cjk.name);
+  parts.push('"Microsoft YaHei"', 'sans-serif');
+  return parts.join(', ');
+};
 const publish = (slot: FontTarget, patch: Partial<FontState>) => {
   state = { ...state, [slot]: { ...state[slot], ...patch } };
-  document.documentElement.style.setProperty(`--${slot === 'app' ? 'app' : 'local-lyrics'}-font-family`, state[slot].family);
+  document.documentElement.style.setProperty('--app-font-family', fontStack(state.app, state['app-cjk']));
+  document.documentElement.style.setProperty('--local-lyrics-font-family', fontStack(state.lyrics, state['lyrics-cjk']));
   listeners.forEach(listener => listener());
 };
 export const useLocalFonts = () => useSyncExternalStore(listener => { listeners.add(listener); return () => { listeners.delete(listener); }; }, () => state);
@@ -30,20 +40,20 @@ async function write(slot: FontTarget, font: LocalFont) {
     tx.objectStore('settings').put(font, `local-font-${slot}`); tx.oncomplete = () => resolve(); tx.onerror = tx.onabort = () => reject(tx.error); });
 }
 async function prepare(font: LocalFont) {
-  if (font.kind === 'system') return { family: fallback, label: 'System default' };
+  if (font.kind === 'system') return { family: fallback, name: 'system-ui', label: 'System default' };
   if (font.kind === 'installed') {
     if (!font.family || font.family.length > 240) throw new Error('Invalid font selection.');
     // Probe availability without copying installed font data or prompting on startup.
     const probe = new FontFace(`LocalFontProbe${++faceId}`, `local(${JSON.stringify(font.family)})`);
     await probe.load();
-    return { family: cssFontFamily(font.family), label: font.family };
+    return { family: cssFontFamily(font.family), name: JSON.stringify(font.family), label: font.family };
   }
   if (!(font.bytes instanceof Uint8Array) || font.bytes.byteLength > 32 * 1024 * 1024) throw new Error('Choose a valid TTF, OTF, WOFF or WOFF2 font under 32 MB.');
   const family = `LocalMusicFont${++faceId}`;
   // Chromium validates the actual font before it replaces the saved selection.
   const face = new FontFace(family, new Uint8Array(font.bytes).buffer, { weight: '100 900', stretch: '50% 200%' });
   await face.load();
-  return { face, family: cssFontFamily(family), label: font.name };
+  return { face, family: cssFontFamily(family), name: JSON.stringify(family), label: font.name };
 }
 async function select(slot: FontTarget, font: LocalFont, persist: boolean, revision: number) {
   try {
@@ -54,7 +64,7 @@ async function select(slot: FontTarget, font: LocalFont, persist: boolean, revis
     if (loaded.face) document.fonts.add(loaded.face);
     if (faces[slot]) document.fonts.delete(faces[slot]!);
     faces[slot] = loaded.face;
-    publish(slot, { kind: font.kind, label: loaded.label, family: loaded.family, error: '', busy: false });
+    publish(slot, { kind: font.kind, label: loaded.label, family: loaded.family, name: loaded.name, error: '', busy: false });
   } catch {
     if (revision === revisions[slot]) publish(slot, { busy: false, error: persist ? 'Font could not be loaded or saved. Choose another local font.' : 'Saved font is unavailable. Choose it again or use the system default.' });
   }
@@ -65,7 +75,7 @@ export async function chooseLocalFont(slot: FontTarget, font: LocalFont) {
   await select(slot, font, true, revision);
 }
 export async function initializeLocalFonts() {
-  await Promise.all((['app', 'lyrics'] as const).map(async slot => {
+  await Promise.all((['app', 'app-cjk', 'lyrics', 'lyrics-cjk'] as const).map(async slot => {
     const revision = revisions[slot];
     try { const font = await read(slot); if (revision === revisions[slot]) await select(slot, font, false, revision); }
     catch { if (revision === revisions[slot]) publish(slot, { error: 'Saved font is unavailable. Choose it again or use the system default.' }); }

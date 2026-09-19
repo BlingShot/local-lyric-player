@@ -1,3 +1,4 @@
+import { selectEmbeddedVariant } from './capabilities';
 import { lyricRevision, revisedLyrics } from './revision';
 import { openLibraryDatabase } from '../library/database';
 import { LYRICS_PARSER_VERSION, parseLyrics } from './parse';
@@ -11,7 +12,8 @@ export async function readLyrics(trackId: string): Promise<SavedLyrics | undefin
     request.onerror = () => reject(request.error);
   });
   if (!record) return undefined;
-  if (record.parserVersion !== LYRICS_PARSER_VERSION) return { ...record, document: parseLyrics(record.source, record.fileName), parserVersion: LYRICS_PARSER_VERSION };
+  if (record.parserVersion !== LYRICS_PARSER_VERSION) return { ...record, document: parseLyrics(record.source, record.fileName),
+    alternates: record.alternates?.map(variant => ({ ...variant, document: parseLyrics(variant.source, variant.fileName) })), parserVersion: LYRICS_PARSER_VERSION };
   return record;
 }
 
@@ -71,4 +73,14 @@ export async function saveLyricOffset(trackId: string, offsetMs: number, savedAt
     };
   });
   window.dispatchEvent(new CustomEvent('local-lyrics-updated', { detail: trackId }));
+}
+
+/** Switching the stored primary keeps every lyric surface on the same source. */
+export async function switchLyricFormat(trackId: string, format: 'lrc' | 'ttml') {
+  const before = await readLyrics(trackId);
+  if (!before) throw new LyricsError('This track has no saved lyrics.');
+  const selected = selectEmbeddedVariant(before, format);
+  if (selected.document.format !== format) throw new LyricsError('This lyric format is not available for this song.');
+  if (selected === before) return;
+  await saveLyrics({ ...selected, savedAt: Date.now() }, lyricRevision(before));
 }

@@ -2,7 +2,7 @@ import type { LocalTrack } from './importFiles';
 import type { EmbeddedLyrics } from '../lyrics/embedded';
 import type { AudioAnalysisMetadata } from './analysisMetadata';
 import { parseLyrics } from '../lyrics/parse';
-export interface AudioTagsResult { tags: Partial<LocalTrack>; cover?: Blob; lyrics?: EmbeddedLyrics }
+export interface AudioTagsResult { tags: Partial<LocalTrack>; cover?: Blob; lyrics?: EmbeddedLyrics; ttml?: EmbeddedLyrics }
 
 export function readAudioAnalysisMetadata(file: File, signal: AbortSignal): Promise<AudioAnalysisMetadata> {
   return new Promise((resolve, reject) => {
@@ -33,8 +33,13 @@ export function readAudioTags(file: File, durationOnly = false): Promise<AudioTa
     worker.onmessage = event => {
       const result: AudioTagsResult = event.data;
       if (typeof event.data.ttmlSource === 'string') {
-        try { result.lyrics = { source: event.data.ttmlSource, document: parseLyrics(event.data.ttmlSource, 'embedded.ttml') }; result.tags.lyricsWarning = result.lyrics.document.notices.join(' ') || undefined; }
-        catch { result.tags.lyricsWarning = 'Embedded TTML could not be parsed. Import a supported lyric file.'; }
+        try {
+          const document = parseLyrics(event.data.ttmlSource, 'embedded.ttml');
+          result.ttml = { source: event.data.ttmlSource, document };
+          result.tags.lyricsWarning = document.notices.join(' ') || result.tags.lyricsWarning;
+        } catch {
+          result.tags.lyricsWarning = result.tags.lyricsWarning || 'Embedded TTML could not be parsed. Import a supported lyric file.';
+        }
       }
       finish(result);
     };

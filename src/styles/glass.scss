@@ -28,9 +28,9 @@
       filter: blur(40px) saturate(.9); opacity: .76;
     }
     &::after {
-      content: ''; position: absolute; inset: 0;
+      content: ''; position: absolute; inset: 0; border-radius: inherit;
       background: linear-gradient(145deg, #ffffff10, transparent 55%, #00000012), color-mix(in srgb, var(--lyrics-background) 65%, transparent);
-      backdrop-filter: blur(18px) saturate(135%); box-shadow: inset 0 0 0 1px #ffffff12;
+      backdrop-filter: none; box-shadow: none;
     }
   }
   .analysis-card, .analysis-audio-card, .analysis-metric, .analysis-stat, .analysis-metrics > div, .offline-album-card,
@@ -84,3 +84,12 @@
 .vocal-label-setting label { display: flex !important; flex-direction: row !important; justify-content: space-between; align-items: center !important; gap: 16px; font-size: 13px; }
 .vocal-label-setting input, .offline-settings-content input[type=checkbox] { accent-color: #1ed760; flex-shrink: 0; }
 .route-loading { display: grid; place-content: center; min-height: 180px; color: #b3b3b3; }
+
+/* The lyric cover is already blurred. A nested backdrop filter creates clipped
+   compositor tiles along the scrolling viewport's bottom edge. */
+[data-glass=true] .offline-app .Main-section.offline-lyrics-page {
+  backdrop-filter: none; box-shadow: none; clip-path: none; isolation: isolate;
+}
+[data-glass=true] :is(.lyrics-page, .mini-lyrics) .lyrics-scroll {
+  background: transparent; box-shadow: none;
+}

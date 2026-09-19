@@ -1,3 +1,4 @@
+import type { ReactNode } from 'react';
 import { recentDiagnosticLogs, useDebugSnapshot, useDiagnostics } from '../../desktop/diagnostics';
 import './debug-overlays.css';
 
@@ -41,6 +42,13 @@ function bitrate(value: unknown) {
   return `${Math.round(n / 1000)} kbps`;
 }
 
+function DebugPanel({ name, status, className, children }: { name: string; status: string; className: string; children: ReactNode }) {
+  return <details className={`debug-overlay ${className}`}>
+    <summary><span className='debug-panel-name'>{name}</span><span className='debug-panel-status'>{status}</span></summary>
+    <div className='debug-panel-fields'>{children}</div>
+  </details>;
+}
+
 function DebugField({ label, value, wide = false }: { label: string; value: string; wide?: boolean }) {
   return <span className={`debug-readout-field${wide ? ' debug-readout-wide' : ''}`} title={`${label}: ${value}`}>
     <span className='debug-readout-label'>{label}</span><span className='debug-readout-value'>{value}</span>
@@ -62,7 +70,7 @@ export function LyricsDebugOverlay() {
     ? `${text(latestStep.stage)}${latestStep.status ? ` · ${text(latestStep.status)}` : ''}`
     : latestLyricTrace ? `${latestLyricTrace.scope} · ${latestLyricTrace.message}` : compactRecord(ttml);
   const follow = rendered.following ? `${text(rendered.following)} · ${Math.round(number(rendered.scrollTop) || 0)}px` : '—';
-  return <aside className='debug-overlay debug-overlay-lyrics' aria-label='Lyrics debug readout'>
+  return <DebugPanel name='Lyrics' status={`${text(lyrics.format)} / ${text(lyrics.activeCount, '0')} active`} className='debug-overlay-lyrics'>
     <DebugField label='Source' value={`${text(lyrics.source)} · ${text(lyrics.format)}`} wide />
     <DebugField label='Clock' value={`${seconds(lyrics.lyricTime)} / ${seconds(lyrics.playbackTime)} · offset ${text(lyrics.offsetMs, '0')}ms`} wide />
     <DebugField label='Line' value={lineRange} wide />
@@ -70,7 +78,7 @@ export function LyricsDebugOverlay() {
     <DebugField label='Active' value={`${text(lyrics.activeCount, '0')} · overlap ${text(overlap.active, 'false')}`} wide />
     <DebugField label='Follow' value={follow} wide />
     <DebugField label='TTML/API' value={shorten(api, 58)} wide />
-  </aside>;
+  </DebugPanel>;
 }
 
 export function AudioDebugOverlay() {
@@ -81,7 +89,7 @@ export function AudioDebugOverlay() {
   const state = `${pipeline.paused === true ? 'paused' : 'playing'} · ready ${text(pipeline.readyState)} · net ${text(pipeline.networkState)}`;
   const outputName = text(output.deviceLabel, text(output.device));
   const contextState = text(context.state, text(context.contextState, compactRecord(context)));
-  return <aside className='debug-overlay debug-overlay-audio' aria-label='Audio debug readout'>
+  return <DebugPanel name='Audio' status={`${text(pipeline.backend)} / ${pipeline.paused === true ? 'paused' : 'playing'}`} className='debug-overlay-audio'>
     <div className='debug-readout-row'>
       <DebugField label='Audio Clock' value={`${seconds(pipeline.currentTime)} / ${seconds(pipeline.duration)}`} />
       <DebugField label='State' value={state} />
@@ -93,7 +101,7 @@ export function AudioDebugOverlay() {
       <DebugField label='Context' value={shorten(contextState, 48)} />
       {pipeline.error ? <DebugField label='Error' value={shorten(compactRecord(pipeline.error), 52)} /> : null}
     </div>
-  </aside>;
+  </DebugPanel>;
 }
 
 export function GlobalDebugOverlay() {
@@ -102,10 +110,10 @@ export function GlobalDebugOverlay() {
   if (!debug) return null;
   const metrics = record(snapshot.metrics), heap = record(metrics.rendererHeap);
   const desktop = record(snapshot.desktop), desktopLogs = list(record(desktop.logs).recent).map(record);
-  const logs = [...recentDiagnosticLogs(), ...desktopLogs];
-  const warnings = logs.filter(entry => entry.level === 'warn').length, errors = logs.filter(entry => entry.level === 'error').length;
+  const logs = [...new Map([...recentDiagnosticLogs(), ...desktopLogs].map(entry => [JSON.stringify([entry.time, entry.level, entry.scope, entry.message]), entry])).values()];
+  const warnings = logs.filter(entry => entry.level === 'warn').length, errors = logs.filter(entry => entry.level === 'error' || entry.level === 'fatal').length;
   const memory = `${bytes(heap.usedBytes)} · ${percentage(heap.usedBytes, heap.limitBytes)} heap`;
-  return <aside className='debug-overlay debug-overlay-global' aria-label='Global debug readout'>
+  return <DebugPanel name='System' status={`${text(metrics.fps)} FPS / ${warnings + errors} alerts`} className='debug-overlay-global'>
     <div className='debug-readout-row'>
       <DebugField label='Memory' value={memory} />
       <DebugField label='FPS' value={text(metrics.fps)} />
@@ -113,5 +121,5 @@ export function GlobalDebugOverlay() {
       <DebugField label='Switch' value={metrics.songSwitchMs === undefined ? '—' : `${text(metrics.songSwitchMs)}ms`} />
       <DebugField label='Logs' value={`${bytes(snapshot.retainedBytes)} · dropped ${snapshot.dropped}`} />
     </div>
-  </aside>;
+  </DebugPanel>;
 }

@@ -16,7 +16,6 @@ import { parseLyrics, LYRICS_PARSER_VERSION } from '../src/lyrics/parse';
 import { defaultLyricsAppearance } from '../src/lyrics/appearance';
 import { MiniLyrics } from '../src/components/Lyrics/MiniLyrics';
 import { StudioLivePreview } from '../src/components/Studio/StudioLivePreview';
-import { LyricBackdrop } from '../src/components/Lyrics/LyricBackdrop';
 import { importProjectTtml } from '../src/studio/projectImport';
 import { importProjectLrc } from '../src/studio/projectImportLrc';
 import { readStudioDraft, saveStudioDraft, studioSourceBackups } from '../src/studio/repository';
@@ -30,9 +29,9 @@ const assert = (condition: unknown, message: string) => { if (!condition) throw 
 let renderer: ReturnType<typeof createRoot> | undefined, time = 96;
 const track: LocalTrack = { id: 'polish', name: 'Regression song', artist: 'Alice', album: 'Test album', size: 4, lastModified: 1,
   fileName: 'regression.wav', duration: 210, embeddedLyricsChecked: true, unavailable: true } as LocalTrack;
-const document: LyricDocument = { format: 'ttml', timing: 'word', agents: { A: 'Alice' }, notices: [], lines: Array.from({ length: 45 }, (_, i) => {
+const document: LyricDocument = { format: 'ttml', timing: 'word', agents: { A: 'Alice', B: 'Bob' }, notices: [], lines: Array.from({ length: 45 }, (_, i) => {
   const start = i * 4 + (i >= 20 ? 10 : 0) + 4;
-  return { id: `line-${i}`, groupId: `line-${i}`, start, end: start + 3, agent: 'A', role: 'lead',
+  return { id: `line-${i}`, groupId: `line-${i}`, start, end: start + 3, agent: i >= 21 ? 'B' : 'A', role: 'lead',
     parts: [{ text: `Line ${i} · `, start, end: start + 1 }, { text: '星', start: start + 1, end: start + 1.1 }, { text: '光', start: start + 1.1, end: start + 3 }],
     annotations: [{ text: `译文 ${i} 风起时 你仍在`, kind: 'translation', language: 'zh-CN' }, { text: 'xing guang', kind: 'romanization' }] };
 }) };
@@ -125,19 +124,8 @@ export async function diagnosticsScenario() {
   await setDebugMode(false); return { debugToggle: true, redaction: true, export: true };
 }
 export async function startPulse() {
-  const audio = getLocalAudioElement();
-  // Simulate a desktop window using the browser backend (the previous detection bug).
-  let nativeCalls = 0;
-  window.localMusicDesktop = { nativeAudioMeter: async () => { nativeCalls++; }, nativeAudioEnergy: async () => { nativeCalls++; return 0; } } as any;
-  (window as any).__nativeMeterCalls = () => nativeCalls;
-  const rate = 24000, count = rate * 6, buffer = new ArrayBuffer(44 + count * 2), view = new DataView(buffer);
-  const ascii = (offset: number, text: string) => [...text].forEach((char, i) => view.setUint8(offset + i, char.charCodeAt(0)));
-  ascii(0, 'RIFF'); view.setUint32(4, 36 + count * 2, true); ascii(8, 'WAVE'); ascii(12, 'fmt '); view.setUint32(16, 16, true);
-  view.setUint16(20, 1, true); view.setUint16(22, 1, true); view.setUint32(24, rate, true); view.setUint32(28, rate * 2, true); view.setUint16(32, 2, true); view.setUint16(34, 16, true);
-  ascii(36, 'data'); view.setUint32(40, count * 2, true);
-  for (let i = 0; i < count; i++) view.setInt16(44 + i * 2, Math.round(Math.sin(i / rate * 2 * Math.PI * 220) * 12000), true);
-  audio.src = URL.createObjectURL(new Blob([buffer], { type: 'audio/wav' }));
-  root().render(<Provider store={store}><div className='offline-app' data-lyrics-fullscreen style={{ width: 1200, height: 800 }}><div className='lyrics-page'><LyricBackdrop reactive /></div></div></Provider>);
-  await audio.play(); return true;
+  // Music-reactive fullscreen background was removed; keep a lightweight guard
+  // so older regression scripts fail loudly instead of silently passing.
+  return false;
 }
 export function pausePulse() { getLocalAudioElement().pause(); }

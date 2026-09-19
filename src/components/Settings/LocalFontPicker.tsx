@@ -5,7 +5,8 @@ import { t } from '../../i18n';
 import { chooseLocalFont, cssFontFamily, installedFontFamilies, useLocalFonts, type FontTarget } from '../../theme/fonts';
 
 export function LocalFontPicker({ target }: { target: FontTarget }) {
-  const font = useLocalFonts()[target], title = target === 'app' ? 'Application font' : 'Lyric font';
+  const font = useLocalFonts()[target];
+  const title = target === 'app' ? 'Application font' : target === 'app-cjk' ? 'Application Chinese font' : target === 'lyrics' ? 'Lyric font' : 'Lyric Chinese font';
   const [open, setOpen] = useState(false), [fonts, setFonts] = useState<string[]>([]), [search, setSearch] = useState('');
   const [error, setError] = useState(''), [loading, setLoading] = useState(false), [importing, setImporting] = useState(false);
   const file = useRef<HTMLInputElement>(null), busy = font.busy || loading || importing;

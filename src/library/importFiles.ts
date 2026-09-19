@@ -3,6 +3,8 @@ import type { AudioAnalysisMetadata } from './analysisMetadata';
 export interface LocalTrack {
   id: string;
   dedupeFingerprint?: string;
+  /** Content identity at import, independent of filename and timestamps. */
+  importHash?: string;
   name: string;
   size: number;
   originalSize?: number;
@@ -52,9 +54,7 @@ export function trackFingerprint(track: LocalTrack): string {
   } catch { /* A UUID is not a legacy metadata key. */ }
   return fileFingerprint({ name: track.fileName || track.name, size: track.originalSize ?? track.size, lastModified: track.lastModified });
 }
-/** Compare only metadata-collision candidates; at most 2 MiB are read at once.
- * This avoids full-file copies/hashing for every ordinary import and yields to UI.
- */
+/** Compare bytes in bounded chunks, yielding between chunks. */
 export async function sameFileBytes(a: Blob, b: Blob): Promise<boolean> {
   if (a.size !== b.size) return false;
   const chunk = 1024 * 1024;
@@ -67,29 +67,46 @@ export async function sameFileBytes(a: Blob, b: Blob): Promise<boolean> {
   }
   return true;
 }
+/** Hash chunk digests rather than allocating a whole-song ArrayBuffer. */
+export async function fileContentHash(file: Blob, signal?: AbortSignal): Promise<string> {
+  const chunks: string[] = [];
+  const hex = (bytes: ArrayBuffer) => [...new Uint8Array(bytes)].map(value => value.toString(16).padStart(2, '0')).join('');
+  for (let offset = 0; offset < file.size; offset += 1024 * 1024) {
+    signal?.throwIfAborted();
+    const bytes = await file.slice(offset, offset + 1024 * 1024).arrayBuffer();
+    chunks.push(hex(await crypto.subtle.digest('SHA-256', bytes)));
+    await new Promise<void>(resolve => setTimeout(resolve, 0));
+  }
+  signal?.throwIfAborted();
+  const manifest = new TextEncoder().encode(`chunks-v1:${file.size}:${chunks.join(':')}`);
+  return 'chunks-v1:' + hex(await crypto.subtle.digest('SHA-256', manifest));
+}
+
 export async function collectFiles(files: readonly File[], existing: readonly LocalTrack[],
   readAudio: (track: LocalTrack) => Blob | undefined | Promise<Blob | undefined> = () => undefined) {
-  const candidates = new Map<string, LocalTrack[]>();
+  const candidates = new Map<number, LocalTrack[]>(), hashes = new Map<string, LocalTrack>();
   for (const track of existing) {
-    const key = trackFingerprint(track), list = candidates.get(key) || [];
-    list.push(track); candidates.set(key, list);
+    const list = candidates.get(track.size) || [];
+    list.push(track); candidates.set(track.size, list);
+    if (track.importHash) hashes.set(track.importHash, track);
   }
   const tracks: LocalTrack[] = [], originals = new Map<string, File>(), resolvedIds: (string | undefined)[] = [];
   let rejected = 0, duplicates = 0;
   for (const file of files) {
     if (!AUDIO_EXTENSION.test(file.name) || file.size === 0) { rejected++; resolvedIds.push(undefined); continue; }
-    const fingerprint = fileFingerprint(file), possible = candidates.get(fingerprint) || [];
-    let duplicate: LocalTrack | undefined;
-    for (const candidate of possible) {
+    const fingerprint = fileFingerprint(file), importHash = await fileContentHash(file);
+    const possible = candidates.get(file.size) || [];
+    let duplicate = hashes.get(importHash);
+    if (duplicate && !(originals.get(duplicate.id) || await readAudio(duplicate))) duplicate = undefined;
+    if (!duplicate) for (const candidate of possible) {
       const bytes = originals.get(candidate.id) || await readAudio(candidate);
-      // Missing/rewritten audio cannot prove equivalence. Never silently skip it.
       if (bytes && await sameFileBytes(file, bytes)) { duplicate = candidate; break; }
     }
     if (duplicate) { duplicates++; resolvedIds.push(duplicate.id); continue; }
-    const track = { id: crypto.randomUUID(), dedupeFingerprint: fingerprint, name: file.name,
+    const track: LocalTrack = { id: crypto.randomUUID(), dedupeFingerprint: fingerprint, importHash, name: file.name,
       fileName: file.name, size: file.size, lastModified: file.lastModified };
     tracks.push(track); originals.set(track.id, file); resolvedIds.push(track.id);
-    possible.push(track); candidates.set(fingerprint, possible);
+    possible.push(track); candidates.set(file.size, possible); hashes.set(importHash, track);
   }
   return { tracks, originals, resolvedIds, rejected, duplicates };
 }

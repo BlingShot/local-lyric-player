@@ -70,7 +70,7 @@ export function StudioLivePreview({ project, durationMs, enabled, recordingWordI
           node.toggleAttribute('data-rapid', timed && rapidWord(part));
           node.style.setProperty('--word-visual', String(visual ?? 0));
           node.style.setProperty('--sustain-glow', String(timed ? sustainedGlow(part, time / 1000) : 0));
-          node.style.setProperty('--studio-word-progress', `${(visual ?? 0) * 100}%`);
+          node.style.setProperty('--studio-word-progress', `${((visual ?? 0) * 100).toFixed(2)}%`);
           const progress = timed ? (100 * Math.max(0, Math.min(1, (time - w.startMs!) / (w.endMs! - w.startMs!)))).toFixed(2) : undefined;
           if (progress !== node.dataset.progress) {
             if (progress === undefined) { delete node.dataset.progress; node.style.removeProperty('--studio-word-progress'); }

@@ -110,14 +110,16 @@ try {
   await page.getByRole('dialog', { name: 'Audio copy ready', exact: true }).getByRole('button', { name: 'Close', exact: true }).click();
   await page.getByRole('link', { name: 'Back to player', exact: true }).click();
   await page.getByRole('button', { name: 'Lyrics', exact: true }).click();
-  const checkBackdrop = async surface => {
+  const checkBackdrop = async (surface, fullscreen = false) => {
     const n = page.locator(surface); await n.locator('.lyric-backdrop img').waitFor();
     const style = await n.evaluate(n => { const back = n.querySelector('.lyric-backdrop'), img = back.querySelector('img'); return {
       filter: getComputedStyle(img).filter, frosted: getComputedStyle(back, '::after').backdropFilter,
       painted: img.complete && img.naturalWidth > 0, position: getComputedStyle(back).position,
       font: getComputedStyle(n.querySelector('.lyric-line-button')).fontSize,
     }; });
-    assert.match(style.filter, /blur\(40px\)/); assert.match(style.frosted, /blur\(18px\)/); assert.equal(style.painted, true); assert.equal(style.position, 'absolute');
+    assert.match(style.filter, /blur\(40px\)/); assert.equal(style.painted, true); assert.equal(style.position, 'absolute');
+    if (fullscreen) assert.equal(style.frosted, 'none');
+    else assert.match(style.frosted, /blur\(18px\)/);
     return style.font;
   };
   const retained = async surface => {
@@ -141,7 +143,7 @@ try {
     assert.equal(await page.locator('.lyrics-page .lyric-line-button').first().evaluate(n => getComputedStyle(n).fontSize), font);
     await glass(true);
     await page.getByRole('button', { name: 'Full screen lyrics', exact: true }).click(); await page.waitForTimeout(500);
-    await checkBackdrop('.lyrics-page'); await retained('.lyrics-page'); await page.screenshot({ path: resolve(root, `fullscreen-${mode}.png`) });
+    await checkBackdrop('.lyrics-page', true); await retained('.lyrics-page'); await page.screenshot({ path: resolve(root, `fullscreen-${mode}.png`) });
     await page.getByRole('button', { name: 'Exit full screen', exact: true }).click(); await page.waitForTimeout(400);
   }
   checks.push('Main and fullscreen retain past backing vocals; real local cover blur in both themes; disabling glass removes the backdrop without changing lyric font size');

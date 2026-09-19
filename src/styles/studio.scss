@@ -162,8 +162,14 @@
 .studio-page .studio-preview-seek:disabled { opacity: 1; }
 .studio-page .studio-preview-seek:hover { background: transparent; }
 .studio-preview-text { font-family: var(--local-lyrics-font-family, system-ui, sans-serif); display: block; font-size: 23px; line-height: 1.6; font-weight: 700; white-space: pre-wrap; overflow-wrap: anywhere; margin: 3px 0; }
-.studio-preview-line [data-preview-word] { border-bottom: 2px solid transparent; }
-.studio-page .studio-preview-line [data-preview-word][data-timed] { color: transparent; background-image: linear-gradient(to right, var(--studio-text) var(--studio-word-progress, 0%), var(--studio-muted) var(--studio-word-progress, 0%)); background-clip: text; -webkit-background-clip: text; }
+.studio-preview-line [data-preview-word] {
+  color: inherit; -webkit-text-fill-color: transparent; -webkit-text-stroke: 0; border-bottom: 0;
+  background-image: linear-gradient(to right, currentColor, currentColor);
+  background-clip: text; -webkit-background-clip: text; transform: none; transition: none;
+}
+.studio-page .studio-preview-line [data-preview-word][data-timed] {
+  background-image: linear-gradient(to right, var(--studio-text) var(--studio-word-progress, 0%), var(--studio-muted) var(--studio-word-progress, 0%));
+}
 .studio-preview-line[data-background] { padding-left: 16px; }
 .studio-preview-line[data-background] .studio-preview-text { font-size: 17px; }
 .studio-preview-line .studio-preview-annotation { font-family: var(--local-lyrics-font-family, system-ui, sans-serif); font-size: 13px; font-weight: 400; color: #aaa; }

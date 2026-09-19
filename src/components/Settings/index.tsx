@@ -1,5 +1,7 @@
 import { useEffect, useState } from 'react';
 import { Modal } from 'antd';
+import { Link } from 'react-router-dom';
+import { LyricTools } from '../Lyrics/LyricTools';
 import { t, setLanguage, useLanguage, type Language } from '../../i18n';
 import { AppSelect } from '../Menu';
 import { useAppDispatch, useAppSelector } from '../../store/store';
@@ -12,6 +14,7 @@ import { NormalizationSettings } from './Normalization';
 import { DeepSeekSettings } from './DeepSeek';
 import { SpotifySettings } from './Spotify';
 import { DesktopStorageSettings } from './DesktopStorage';
+import { DuplicateTracksSettings } from './DuplicateTracks';
 import { DiagnosticsSettings } from './Diagnostics';
 import { ListeningTimeSettings } from './ListeningTime';
 import { LocalFontPicker } from './LocalFontPicker';
@@ -19,11 +22,13 @@ import { LyricAppearanceSettings } from './LyricAppearance';
 import { AudioOutputSettings } from './AudioOutput';
 import { useSavedLyrics } from '../../lyrics/useSavedLyrics';
 import { useLyricOffset } from '../../lyrics/useLyricOffset';
+import { lyricCapabilities } from '../../lyrics/capabilities';
 import { LyricsTimingControls } from '../Lyrics/LyricsTiming';
 import { VolumeControl } from '../VolumeControl';
 
 const categories = ['Appearance', 'Lyrics', 'Playback', 'Online services', 'Storage', 'Advanced'] as const;
 function SettingsContent() {
+  const dispatch = useAppDispatch();
   const [tab, setTab] = useState<typeof categories[number]>('Appearance'), locale = useLanguage(), theme = useAppTheme(), surface = useSurface(), configError = useConfigReadError();
   const track = useAppSelector(state => state.library.tracks.find(track => track.id === state.player.currentId));
   const { saved } = useSavedLyrics(track?.id, track?.embeddedLyricsChecked), timing = useLyricOffset(saved);
@@ -36,14 +41,23 @@ function SettingsContent() {
         <div className='settings-field'><span>{t('Theme')}</span><AppSelect label={t('App theme')} value={theme.mode} onChange={value => setThemeMode(value as ThemeMode)} options={[{ value: 'dark', label: t('Night mode') }, { value: 'light', label: t('Day mode') }]} /></div>
         <label><input type='checkbox' checked={surface.glass} onChange={e => void setGlassSurface(e.target.checked)} />{t('Liquid glass')}</label>
         {(locale.error || theme.error || surface.error) && <p role='alert'>{t(locale.error || theme.error || surface.error)}</p>}
-      </section><section><LocalFontPicker target='app' /></section>
+      </section><section><LocalFontPicker target='app' /><LocalFontPicker target='app-cjk' /></section>
     </div>
-    <div hidden={tab !== 'Lyrics'} className='settings-category'><header><h2>{t('Lyrics')}</h2></header><LyricAppearanceSettings />
+    <div hidden={tab !== 'Lyrics'} className='settings-category'><header><h2>{t('Lyrics')}</h2></header>
+      <section className='settings-lyric-tools'><h3>{t('Lyric tools')}</h3><p>{track?.name || t('No track selected')}</p>
+        <div className='settings-lyric-tool-actions'>
+          {saved && track && <LyricTools key={`tools:${track.id}`} saved={saved} track={track} />}
+          <Link className='lyrics-import-button' to={track ? `/studio?trackId=${encodeURIComponent(track.id)}` : '/studio'}
+            onClick={() => dispatch(uiActions.setSettingsOpen(false))}>{t('Lyric Studio')}</Link>
+        </div>
+        {!saved && <p>{t('Select a song with lyrics to translate or export an image.')}</p>}
+      </section>
+      <LyricAppearanceSettings capabilities={lyricCapabilities(saved?.document)} />
       <section><h3>{t('Lyrics timing')}</h3><p>{track?.name || t('No track selected')}</p>{saved ? <LyricsTimingControls offsetMs={timing.offsetMs} onChange={value => void timing.update(value)} /> : <p>{t('Select a song with saved or embedded lyrics to adjust its timing.')}</p>}{timing.error && <p role='alert'>{t(timing.error)}</p>}</section>
     </div>
     <div hidden={tab !== 'Playback'} className='settings-category'><header><h2>{t('Playback')}</h2></header><section><h3>{t('Volume')}</h3><VolumeControl /></section><AudioOutputSettings active={tab === 'Playback'} /><NormalizationSettings /><ListeningTimeSettings /></div>
     <div hidden={tab !== 'Online services'} className='settings-category'><header><h2>{t('Online services')}</h2></header><SpotifySettings /><DeepSeekSettings /></div>
-    <div hidden={tab !== 'Storage'} className='settings-category'><header><h2>{t('Storage')}</h2></header><AutoImportFolder /><DesktopStorageSettings /></div>
+    <div hidden={tab !== 'Storage'} className='settings-category'><header><h2>{t('Storage')}</h2></header><AutoImportFolder /><DuplicateTracksSettings /><DesktopStorageSettings /></div>
     <div hidden={tab !== 'Advanced'} className='settings-category'><header><h2>{t('Advanced')}</h2></header><DiagnosticsSettings /></div>
   </div></div>;
 }

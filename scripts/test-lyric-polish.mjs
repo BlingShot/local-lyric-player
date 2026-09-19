@@ -13,8 +13,8 @@ const checks = [], errors = [];
 let browser;
 const call = (page, name, args = []) => page.evaluate(async ({ name, args }) => (await import('/tests/lyric-polish-browser.tsx'))[name](...args), { name, args });
 try {
-  await server.listen(); browser = await chromium.launch({ headless: true, args: ['--autoplay-policy=no-user-gesture-required'] });
-  const context = await browser.newContext({ viewport: { width: 1500, height: 1000 } });
+  await server.listen(); browser = await chromium.launch({ channel: process.env.BROWSER_CHANNEL || 'msedge', headless: true, args: ['--autoplay-policy=no-user-gesture-required'] });
+  const context = await browser.newContext({ locale: 'en-US', viewport: { width: 1500, height: 1000 } });
   const page = await context.newPage(); page.on('pageerror', error => errors.push(error.message)); await page.goto(origin + '/__polish');
   await call(page, 'seed'); await call(page, 'mountApp');
   await page.waitForFunction(() => document.querySelector('.lyrics-scroll')?.dataset.followReady === 'true'); await page.waitForTimeout(700);
@@ -108,14 +108,9 @@ try {
   for (const kind of ['api', 'repository', 'concurrent', 'ambiguous', 'mismatch', 'existing', 'offline']) checks.push({ amll: await call(page, 'amllScenario', [kind]) });
   checks.push({ diagnostics: await call(page, 'diagnosticsScenario') });
   const pulse = await context.newPage(); pulse.on('pageerror', error => errors.push(error.message)); await pulse.goto(origin + '/__polish');
-  await call(pulse, 'startPulse'); await pulse.waitForTimeout(600);
-  const pulseState = () => pulse.locator('.lyric-music-pulse').evaluate(e => ({ value: Number(e.style.getPropertyValue('--music-pulse')), transform: getComputedStyle(e).transform }));
-  const first = await pulseState(); await pulse.waitForTimeout(350); const second = await pulseState();
-  assert.ok(first.value > .02 && second.value > .02, 'real browser audio did not drive the pulse'); assert.notEqual(first.transform, second.transform);
-  assert.equal(await pulse.evaluate(() => window.__nativeMeterCalls()), 0, 'browser backend was treated as native');
-  await call(pulse, 'pausePulse'); await pulse.waitForTimeout(900); assert.ok((await pulseState()).value < second.value * .6, 'paused audio did not release the pulse');
-  await pulse.emulateMedia({ reducedMotion: 'reduce' }); await pulse.waitForTimeout(100); assert.equal(await pulse.locator('.lyric-music-pulse').evaluate(e => getComputedStyle(e).display), 'none');
-  checks.push('A real PCM audio fixture animates the background through the browser backend, releases on pause, and stops for reduced motion.');
+  await call(pulse, 'mountApp', ['/lyrics']);
+  assert.equal(await pulse.locator('.lyric-music-pulse').count(), 0, 'fullscreen music-reactive layer was removed');
+  checks.push('Music-reactive fullscreen background is gone from the lyric surface.');
   assert.deepEqual(errors, [], 'Unexpected browser errors');
   await writeFile(`${output}/checks.json`, JSON.stringify({ success: true, checks }, null, 2)); console.log(JSON.stringify({ success: true, checks }, null, 2));
 } catch (error) { await writeFile(`${output}/failure.txt`, error.stack || String(error)); throw error; }

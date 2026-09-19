@@ -22,7 +22,7 @@
 .lyrics-remote-notice button { color: inherit; flex: 0 0 auto; padding: 2px 0; font: inherit; text-decoration: underline; text-underline-offset: 3px; }
 [data-theme=light] .lyrics-remote-notice { background: #f7f7f7; color: #202124; }
 .mini-lyrics .lyrics-remote-notice { inset-inline: 10px; max-width: calc(100% - 20px); padding: 8px 12px; }
-.lyrics-lines .lyric-interlude.lyric-dots { display: block; height: calc(var(--interlude-space, 0) * 90px); min-height: 0; padding: 0; margin: 0; opacity: 1; color: var(--lyrics-highlight); transform: none; transition: none; overflow: clip; }
+.lyrics-lines .lyric-interlude.lyric-dots { display: block; height: calc(var(--interlude-space, 0) * 90px); min-height: 0; padding: 0; margin: 0; opacity: 1; color: var(--lyrics-highlight); transform: none; transition: none; overflow: visible; }
 .lyric-dots-content { height: 90px; display: flex; align-items: center; min-height: 0; }
 .lyric-dots-content button { display: flex; gap: 10px; align-items: center; width: fit-content; min-width: 90px; min-height: 48px; padding: 10px 6px; background: none; border: 0; color: inherit; cursor: pointer; opacity: var(--interlude-opacity, 0); transform: translateY(var(--interlude-y, 0px)) scale(var(--interlude-scale, 1)); transform-origin: left center; transition: none; animation: none; }
 .lyric-dots-content button:focus-visible { outline: 2px solid currentColor; outline-offset: -2px; border-radius: 8px; }
@@ -30,3 +30,34 @@
 .lyric-dot { display: block; width: 12px; height: 12px; background: currentColor; border-radius: 50%; opacity: .25; }
 @media (max-width: 650px) { .lyric-image-layout { grid-template-columns: minmax(0, 1fr); }.lyric-image-preview { grid-row: 1; }.lyric-image-lines { max-height: 180px; } }
 @media (prefers-reduced-motion: reduce) { .lyric-dots, .lyric-dots-content button, .lyrics-remote-notice { transition: none !important; animation: none !important; transform: none !important; }.lyric-dot { animation: none !important; transform: none !important; }.lyric-dots:is([data-phase=entering], [data-phase=visible]) .lyric-dots-content button { opacity: 1; } }
+
+/* The interlude owns no rectangular surface, including hover and glass modes. */
+body .lyrics-lines .lyric-dots-content button,
+body .lyrics-lines .lyric-dots-content button:hover,
+[data-glass=true] .lyrics-lines .lyric-dots-content button {
+  background: transparent !important; background-image: none !important;
+  box-shadow: none !important; filter: none !important; backdrop-filter: none !important;
+  border: 0; text-shadow: none;
+}
+.embedded-source-control { position: relative; display: inline-flex; align-items: center; flex-wrap: nowrap; gap: 6px; min-width: 0; }
+.embedded-source-control .embedded-source-refresh { padding: 6px 8px; border: 0; background: transparent; color: inherit; font: inherit; font-size: 11px; opacity: .75; }
+.embedded-source-notice {
+  position: absolute; z-index: 45; top: calc(100% + 8px); right: 0;
+  width: max-content; max-width: min(320px, 80vw); padding: 9px 13px;
+  background: #181818; color: #ededed; border: 1px solid #ffffff18; border-radius: 8px;
+  font-size: 12px; line-height: 1.6; white-space: normal; overflow-wrap: anywhere;
+  opacity: 0; visibility: hidden; transform: translateY(-4px); pointer-events: none;
+  transition: opacity 200ms ease, transform 240ms ease, visibility 0s 240ms;
+}
+.embedded-source-notice[data-visible] { opacity: 1; visibility: visible; transform: none; transition-delay: 0s; }
+.embedded-source-notice[data-error] { color: #ffb9ac; }
+[data-theme=light] .embedded-source-notice { background: #fafafa; color: #202020; border-color: #0002; }
+[data-theme=light] .embedded-source-notice[data-error] { color: #a42b25; }
+.mini-lyrics .embedded-source-notice { left: 12px; right: auto; max-width: calc(100% - 24px); }
+.mini-lyrics > .embedded-source-control { padding: 0 16px 8px; flex-shrink: 0; font-size: 11px; }
+.embedded-format-switch button:disabled { opacity: .35; cursor: not-allowed; }
+
+.settings-lyric-tool-actions { display: flex; align-items: center; flex-wrap: wrap; gap: 10px; }
+.settings-category .settings-lyric-tool-actions .lyrics-import-button { color: var(--popup-text); border-color: var(--settings-input-border); font: inherit; font-size: 13px; font-weight: 600; padding: 8px 16px; }
+.settings-lyric-tool-actions .lyrics-import-button:hover { background: var(--popup-hover); border-color: var(--popup-text); }
+@media (prefers-reduced-motion: reduce) { .embedded-source-notice { transition: none; transform: none; } }

@@ -14,7 +14,9 @@ const librarySlice = createSlice({
   initialState,
   reducers: {
     restore(state, action: PayloadAction<{ tracks: LocalTrack[]; playlists: LocalPlaylist[] }>) {
-      state.tracks = action.payload.tracks; state.playlists = action.payload.playlists; state.ready = true;
+      // Defensive: legacy or multi-tab storage must never surface the same id twice.
+      state.tracks = [...new Map(action.payload.tracks.map(track => [track.id, track])).values()];
+      state.playlists = action.payload.playlists; state.ready = true;
     },
     updateTracks(state, action: PayloadAction<LocalTrack[]>) {
       const updates = new Map(action.payload.map(track => [track.id, track]));

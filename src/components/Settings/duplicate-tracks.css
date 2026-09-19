@@ -1,0 +1,16 @@
+.duplicate-preview-window .ant-modal-body > p { color: var(--text-subdued, #a7a7a7); font-size: 13px; line-height: 1.7; }
+.duplicate-preview-groups { max-height: 50vh; overflow: auto; display: grid; gap: 16px; padding: 6px 2px; }
+.duplicate-preview-groups fieldset { min-width: 0; padding: 14px; border: 1px solid #8884; border-radius: 8px; }
+.duplicate-preview-groups legend { max-width: 100%; padding-inline: 6px; font-size: 14px; font-weight: 700; overflow-wrap: anywhere; }
+.duplicate-preview-track { display: flex; align-items: flex-start; gap: 12px; padding: 10px 0; cursor: pointer; }
+.duplicate-preview-track input { margin-top: 5px; accent-color: #1ed760; }
+.duplicate-preview-track > span:first-of-type { min-width: 0; flex: 1; }
+.duplicate-preview-track strong, .duplicate-preview-track small { display: block; overflow-wrap: anywhere; line-height: 1.65; }
+.duplicate-preview-track small { opacity: .65; font-size: 12px; }
+.duplicate-keep-label { color: #1ed760; font-size: 11px; flex-shrink: 0; }
+.duplicate-preview-window button:not(.ant-modal-close), .duplicate-settings button { padding: 8px 14px; border: 1px solid #8885; border-radius: 999px; color: inherit; background: transparent; font: inherit; font-size: 12px; cursor: pointer; }
+.duplicate-preview-window button:not(.ant-modal-close):hover:not(:disabled), .duplicate-settings button:hover:not(:disabled) { background: #8882; }
+.duplicate-preview-window .duplicate-confirm { margin-top: 8px; background: #1ed760 !important; color: #121212 !important; border-color: transparent !important; font-weight: 700 !important; }
+.duplicate-preview-window button:disabled, .duplicate-settings button:disabled { opacity: .4; cursor: not-allowed; }
+.duplicate-preview-message { margin-block: 14px; line-height: 1.6; }
+@media (max-width: 560px) { .duplicate-preview-track { flex-wrap: wrap; }.duplicate-keep-label { flex-basis: 100%; padding-left: 26px; } }
