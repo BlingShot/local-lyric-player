@@ -40,7 +40,9 @@ export async function writeCopy(before: Awaited<ReturnType<typeof snapshot>>) {
 export async function collisionImportAndMigration() {
   const db = await openLibraryDatabase(), library = await readLibrary();
   const oldId = JSON.stringify(['same.wav', 4, 123]), old = library.tracks.find(t => t.id === oldId)!;
-  check(db.version === 5 && old?.dedupeFingerprint === oldId, 'v4 fingerprint migration failed');
+  check(db.version === 6 && old?.dedupeFingerprint === oldId, 'v4 to v6 fingerprint migration failed');
+  const hashIndex = db.transaction('tracks').objectStore('tracks').index('importHash');
+  check(hashIndex.unique && hashIndex.keyPath === 'importHash', 'Migration did not create the content-deduplication index');
   const tx = db.transaction(['covers', 'lyrics', 'playlists', 'analysis', 'analysis-edits', 'analysis-tasks', 'settings']);
   const values = await Promise.all([
     get(tx.objectStore('covers').get(oldId)), get(tx.objectStore('lyrics').get(oldId)),

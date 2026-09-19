@@ -1,3 +1,4 @@
+import { openSettingsTab, closeSettings } from './regression-ui.mjs';
 import assert from 'node:assert/strict';
 import { createServer } from 'vite';
 import { chromium } from 'playwright';
@@ -13,7 +14,7 @@ const checks = [], errors = [];
 let browser;
 const call = (page, name, args = []) => page.evaluate(async ({ name, args }) => (await import('/tests/lyric-polish-browser.tsx'))[name](...args), { name, args });
 try {
-  await server.listen(); browser = await chromium.launch({ channel: process.env.BROWSER_CHANNEL || 'msedge', headless: true, args: ['--autoplay-policy=no-user-gesture-required'] });
+  await server.listen(); browser = await chromium.launch({ channel: process.env.BROWSER_CHANNEL || undefined, headless: true, args: ['--autoplay-policy=no-user-gesture-required'] });
   const context = await browser.newContext({ locale: 'en-US', viewport: { width: 1500, height: 1000 } });
   const page = await context.newPage(); page.on('pageerror', error => errors.push(error.message)); await page.goto(origin + '/__polish');
   await call(page, 'seed'); await call(page, 'mountApp');
@@ -22,20 +23,21 @@ try {
   const before = await anchor(); assert.ok(before.scroll > 500);
   // Sample every animation frame: toggles may not pass through the beginning of the song.
   await page.evaluate(() => { window.__samples = []; window.__sampling = true; const sample = () => { window.__samples.push(document.querySelector('.lyrics-page .lyrics-scroll').scrollTop); if (window.__sampling) requestAnimationFrame(sample); }; sample(); });
-  await page.getByRole('button', { name: 'Lyric display', exact: true }).click();
+  await openSettingsTab(page, 'Lyrics');
   await page.getByRole('checkbox', { name: 'Show performer labels', exact: true }).uncheck(); await page.waitForTimeout(200);
   let after = await anchor(); assert.ok(Math.abs(after.top - before.top) < 12, `label toggle moved the anchor: ${JSON.stringify({ before, after })}`);
   await page.getByRole('checkbox', { name: 'Show translations', exact: true }).uncheck(); await page.waitForTimeout(150);
   assert.equal(await page.locator('.lyrics-page .lyric-translation').count(), 0); assert.ok(await page.locator('.lyrics-page .lyric-romanization').count() > 0);
   after = await anchor(); assert.ok(Math.abs(after.top - before.top) < 12, 'translation toggle moved the anchor');
   await page.getByRole('checkbox', { name: 'Show translations', exact: true }).check();
-  await page.getByRole('checkbox', { name: 'Show performer labels', exact: true }).check(); await page.keyboard.press('Escape'); await page.waitForTimeout(200);
+  await page.getByRole('checkbox', { name: 'Show performer labels', exact: true }).check(); await closeSettings(page); await page.waitForTimeout(200);
   const samples = await page.evaluate(() => { window.__sampling = false; return window.__samples; }); assert.ok(Math.min(...samples) > 300, 'toggle scrolled through the first line');
   checks.push('Performer/translation toggles keep the current line anchored; romanization stays visible; no scroll-to-zero frame.');
   const activeTranslation = page.locator('.lyrics-page [data-line-id="line-20"] .lyric-translation'); await activeTranslation.hover();
   assert.ok((await activeTranslation.evaluate(element => getComputedStyle(element).textDecorationLine)).includes('underline'));
   await page.screenshot({ path: `${output}/main-lyrics.png` });
   // Current line with its immediate neighbours, not the first three lines.
+  await openSettingsTab(page, 'Lyrics');
   await page.getByRole('button', { name: 'Export image', exact: true }).click();
   const selected = await page.locator('.lyric-image-lines label:has(input:checked)').allTextContents();
   assert.equal(selected.length, 3); assert.ok(selected[0].includes('Line 19') && selected[1].includes('Line 20') && selected[2].includes('Line 21'));
@@ -45,19 +47,56 @@ try {
   await page.waitForFunction(() => document.querySelector('[aria-label="Image theme"]')?.textContent.includes('Custom test'));
   await page.locator('.lyric-image-preview img').waitFor(); assert.equal(await page.locator('.lyric-image-modal canvas').evaluate(c => c.toDataURL('image/png')), await page.locator('.lyric-image-preview img').getAttribute('src'));
   await page.screenshot({ path: `${output}/image-export.png` }); await page.locator('.lyric-image-modal .ant-modal-close').click();
+  await page.locator('.lyric-image-modal').waitFor({ state: 'hidden' }); await closeSettings(page);
   checks.push('Image export selects previous/current/next; seven presets and custom JSON import work; preview equals exported PNG.');
-  // Interlude exits in media time and is gone before vocal activation.
-  for (const t of [90, 93.4, 93.65, 93.9, 94, 95, 190, 205, 90]) {
-    await call(page, 'setClock', [t]); await page.waitForTimeout(70);
-    const gap = await page.locator('[data-interlude-id="interlude:line-20"]').evaluate(e => ({ height: e.getBoundingClientRect().height, phase: e.dataset.phase, opacity: Number(getComputedStyle(e.querySelector('button')).opacity) }));
-    if (t >= 94) assert.equal(gap.height, 0);
-    if (t === 90) assert.equal(gap.phase, 'visible');
-    if (t === 93.9) assert.ok(gap.opacity < .1);
+  // Entrance/exit use animation time, even when the media clock is paused or seeks.
+  const gapSelector = '[data-interlude-id="interlude:line-20"]';
+  const sampleGap = (time, duration = 850) => page.evaluate(async ({ time, duration, selector }) => {
+    const fixture = await import('/tests/lyric-polish-browser.tsx');
+    const row = document.querySelector(selector), button = row.querySelector('button'), samples = [];
+    const sample = () => { const style = getComputedStyle(button); samples.push({
+      phase: row.dataset.phase, height: row.getBoundingClientRect().height, opacity: Number(style.opacity),
+      background: style.backgroundColor, shadow: style.boxShadow,
+      lit: row.querySelectorAll('.lyric-dot[data-lit="true"]').length,
+    }); };
+    fixture.setClock(time); sample();
+    const start = performance.now();
+    await new Promise(resolve => { const tick = () => { sample(); if (performance.now() - start < duration) requestAnimationFrame(tick); else resolve(); }; requestAnimationFrame(tick); });
+    return samples;
+  }, { time, duration, selector: gapSelector });
+  const entered = await sampleGap(90);
+  assert.ok(entered.some(sample => sample.opacity > 0 && sample.opacity < .99), 'Missing smooth entrance');
+  assert.equal(entered.at(-1).phase, 'visible'); assert.equal(entered.at(-1).opacity, 1);
+  await call(page, 'setClock', [93.9]);
+  const beforeEnd = await page.locator(gapSelector).evaluate(row => ({ opacity: Number(getComputedStyle(row.querySelector('button')).opacity), lit: row.querySelectorAll('.lyric-dot[data-lit="true"]').length }));
+  assert.equal(beforeEnd.opacity, 1); assert.equal(beforeEnd.lit, 2, 'Final dot must wait until the gap ends');
+  const checkExit = (samples, label) => {
+    assert.ok(samples[0].height > 0 && samples[0].opacity > .99, label + ': row vanished before its exit');
+    assert.equal(samples[0].lit, 3, label + ': final dot did not light');
+    assert.ok(samples.some(sample => sample.phase === 'leaving' && sample.opacity > 0 && sample.opacity < .99 && sample.height >= samples[0].height - .5), label + ': ink must fade before height collapses');
+    assert.ok(samples.some(sample => sample.opacity === 0 && sample.height > .5), label + ': row squeezed away before ink faded');
+    assert.equal(samples.at(-1).phase, 'hidden'); assert.equal(samples.at(-1).height, 0);
+    for (let i = 1; i < samples.length; i++) {
+      assert.ok(samples[i].height <= samples[i - 1].height + .5, label + ': exit height jumped backwards');
+      assert.ok(samples[i].opacity <= samples[i - 1].opacity + .001, label + ': exit restarted');
+    }
+    for (const sample of samples) {
+      assert.equal(sample.background, 'rgba(0, 0, 0, 0)', label + ': rectangular background');
+      assert.equal(sample.shadow, 'none', label + ': rectangular shadow');
+    }
+  };
+  checkExit(await sampleGap(94), 'Natural boundary');
+  await sampleGap(90); await call(page, 'setClock', [93.7]);
+  const paused = await page.locator(gapSelector).getAttribute('style');
+  await page.waitForTimeout(180); assert.equal(await page.locator(gapSelector).getAttribute('style'), paused);
+  checkExit(await sampleGap(96), 'Seek past interlude');
+  for (const time of [190, 205]) {
+    await call(page, 'setClock', [time]);
+    assert.equal(await page.locator(gapSelector).evaluate(row => row.getBoundingClientRect().height), 0);
     assert.equal(await page.locator('[data-kind="outro"]').count(), 0);
   }
-  await call(page, 'setClock', [93.7]); const paused = await page.locator('[data-interlude-id="interlude:line-20"]').getAttribute('style'); await page.waitForTimeout(180); assert.equal(await page.locator('[data-interlude-id="interlude:line-20"]').getAttribute('style'), paused);
   await call(page, 'setClock', [96]); await page.waitForTimeout(650);
-  checks.push('Interlude fades and reclaims height before vocals; pause and backward seek are deterministic; no outro interlude.');
+  checks.push('Interlude has a smooth entrance, lights the final dot, fades before reclaiming height on natural completion and seeks, and never paints a rectangular surface.');
   await call(page, 'fullscreen', [true]); await page.waitForTimeout(500);
   await page.locator('.offline-details-button').click(); await page.locator('.ant-drawer-open .offline-file-details').waitFor({ state: 'visible' });
   const mask = await page.locator('.lyrics-page .lyrics-scroll').evaluate(e => ({ mask: getComputedStyle(e).maskImage, before: getComputedStyle(e.closest('.lyrics-reader'), '::before').content, after: getComputedStyle(e.closest('.lyrics-reader'), '::after').content }));

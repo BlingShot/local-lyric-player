@@ -28,7 +28,7 @@ test('report keeps all section names, independently sanitizes each and stays wit
 });
 test('multibyte entries, concurrent rotation, queue overflow and normal-mode filtering remain bounded', async t => {
   const root = await temporary(t), logger = new DesktopLogger(root, { maxBytes: 1024, maxFiles: 3, maxQueued: 8 });
-  logger.setDebug(true);
+  logger.setDebug(true); logger.setLevel('debug');
   await Promise.all(Array.from({ length: 100 }, (_, i) => logger.write({ level: 'debug', scope: 'test', message: `${i} ${'字'.repeat(5000)}`, data: { token: 'must-not-remain' } })));
   assert.ok(logger.dropped > 0);
   await logger.write({ level: 'error', scope: 'audio', message: 'decode failed', data: { error: new Error('corrupt.flac') } });

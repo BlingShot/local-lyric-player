@@ -21,7 +21,7 @@ import { importProjectLrc } from '../src/studio/projectImportLrc';
 import { readStudioDraft, saveStudioDraft, studioSourceBackups } from '../src/studio/repository';
 import { resolveAmll } from '../src/lyrics/amll';
 import { translateLyrics } from '../src/lyrics/translate';
-import { diagnosticLog, diagnosticText, initializeDiagnostics, setDebugMode } from '../src/desktop/diagnostics';
+import { diagnosticLog, diagnosticText, initializeDiagnostics, setDebugMode, setLogLevel } from '../src/desktop/diagnostics';
 import type { LocalTrack } from '../src/library/importFiles';
 import type { LyricDocument, SavedLyrics } from '../src/lyrics/types';
 import '../src/index.css';
@@ -118,10 +118,10 @@ export async function amllScenario(kind: 'api' | 'repository' | 'concurrent' | '
 }
 export async function diagnosticsScenario() {
   await initializeDiagnostics(); await setDebugMode(false); diagnosticLog('debug', 'test', 'SECRET_DEBUG_OFF');
-  await setDebugMode(true); diagnosticLog('debug', 'test', 'Debug active Bearer abc123 sk-123456789abcdef');
+  await setDebugMode(true); await setLogLevel('debug'); diagnosticLog('debug', 'test', 'Debug active Bearer abc123 sk-123456789abcdef');
   const text = await diagnosticText();
   assert(!text.includes('SECRET_DEBUG_OFF') && !text.includes('abc123') && !text.includes('sk-123456789abcdef') && text.includes('Debug active'), 'debug filtering/redaction failed');
-  await setDebugMode(false); return { debugToggle: true, redaction: true, export: true };
+  await setDebugMode(false); await setLogLevel('info'); return { debugToggle: true, redaction: true, export: true };
 }
 export async function startPulse() {
   // Music-reactive fullscreen background was removed; keep a lightweight guard

@@ -9,12 +9,13 @@ import { redactDiagnostic } from '../electron/log-redaction.mjs';
 
 const root = await createAudioAnalysisFixtures(), port = 4183, origin = `http://127.0.0.1:${port}`;
 const server = await preview({ preview: { host: '127.0.0.1', port, strictPort: true } });
-const browser = await chromium.launch({ channel: 'msedge', headless: true });
-const context = await browser.newContext({ viewport: { width: 1440, height: 1000 } });
+const browser = await chromium.launch({ channel: process.env.BROWSER_CHANNEL || undefined, headless: true });
+const context = await browser.newContext({ locale: 'en-US', viewport: { width: 1440, height: 1000 } });
 const errors = [], external = [], checks = [], measurements = []; let phase = 'import';
 await context.route('**/*', route => new URL(route.request().url()).origin === origin ? route.continue() : (external.push(route.request().url()), route.abort()));
 await context.addInitScript(() => {
-  window.__audioCount = 0; const Audio = window.Audio; window.Audio = class extends Audio { constructor(...args) { super(...args); window.__audioCount++; } };
+  localStorage.setItem('local-music-language', 'en');
+  window.__audioCount = 0; const Audio = window.Audio; window.Audio = class extends Audio { constructor(...args) { super(...args); this.muted = true; window.__audioCount++; } };
   window.__analysisWorkers = { started: 0, active: 0, max: 0 }; const Worker = window.Worker;
   window.Worker = class extends Worker {
     constructor(url, options) { super(url, options); this.analysis = String(url).includes('analysis.worker');

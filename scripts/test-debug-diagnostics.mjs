@@ -1,3 +1,5 @@
+import { openSettingsTab, closeSettings, expandDebugPanel } from './regression-ui.mjs';
+import { selectMenu } from './select-menu.mjs';
 import assert from 'node:assert/strict';
 import { createServer } from 'vite';
 import { chromium } from 'playwright';
@@ -11,7 +13,7 @@ const call = (page, name, args = []) => page.evaluate(async ({ name, args }) => 
 let browser; const results = [], errors = [];
 try {
   await server.listen(); browser = await chromium.launch({ headless: true, executablePath: process.env.PLAYWRIGHT_CHROMIUM_EXECUTABLE || undefined });
-  const context = await browser.newContext({ viewport: { width: 1500, height: 1000 }, permissions: ['clipboard-read', 'clipboard-write'] });
+  const context = await browser.newContext({ locale: 'en-US', viewport: { width: 1500, height: 1000 }, permissions: ['clipboard-read', 'clipboard-write'] });
   const page = await context.newPage(); page.on('pageerror', error => errors.push(error.message));
   await page.goto(origin + '/__debug'); await call(page, 'boot');
   await page.getByRole('button', { name: 'Advanced', exact: true }).click();
@@ -20,12 +22,14 @@ try {
   assert.equal(normal.samples, 0); assert.equal(normal.desktopPolls, 0); assert.ok(normal.retained - before.retained < 5);
   assert.equal(await page.locator('.debug-overlay').count(), 0);
   results.push({ normalMode: 'no sampler, no IPC polling, DEBUG noise dropped, no overlays', normal });
+  await selectMenu(page, 'Recorded log level', 'debug');
   await page.getByRole('checkbox', { name: 'Debug mode', exact: true }).check();
+  await closeSettings(page);
   await page.waitForTimeout(1200); assert.ok((await call(page, 'stats')).samples >= 2);
   const lyricOverlay = page.locator('.debug-overlay-lyrics'), audioOverlay = page.locator('.debug-overlay-audio'), globalOverlay = page.locator('.debug-overlay-global');
-  await lyricOverlay.waitFor(); await audioOverlay.waitFor(); await globalOverlay.waitFor();
-  assert.equal(await page.locator('.lyrics-page > .lyrics-debug-band .debug-overlay-global').count(), 1);
-  assert.equal(await page.locator('.lyrics-page > .lyrics-debug-band .debug-overlay-audio').count(), 1);
+  for (const panel of [lyricOverlay, audioOverlay, globalOverlay]) await expandDebugPanel(panel);
+  assert.equal(await page.locator('.lyrics-page .lyrics-content > .lyrics-debug-band .debug-overlay-global').count(), 1);
+  assert.equal(await page.locator('.lyrics-page .lyrics-content > .lyrics-debug-band .debug-overlay-audio').count(), 1);
   assert.equal(await page.locator('.offline-playing-bar .debug-overlay-audio').count(), 0);
   const lyricText = await lyricOverlay.innerText(); assert.ok(lyricText.includes('AMLL TTML')); assert.ok(lyricText.includes('Line')); assert.ok(lyricText.includes('Word'));
   const audioText = await audioOverlay.innerText(); assert.ok(audioText.includes('Backend')); assert.ok(audioText.includes('Clock')); assert.ok(audioText.includes('Live bitrate'));
@@ -36,6 +40,7 @@ try {
   for (const key of ['environment', 'currentSong', 'audio', 'lyrics', 'amllTtml', 'performance', 'recentErrors', 'recentLogs', 'recentDesktopLogs']) assert.ok(key in parsed, key);
   for (const secret of ['PrivateUser', 'test-secret-key', 'test-bearer-secret']) assert.ok(!report.includes(secret), secret);
   assert.ok(report.includes('sample.flac')); assert.ok(report.includes('stack')); assert.ok(Buffer.byteLength(report) < 1024 * 1024);
+  await openSettingsTab(page, 'Advanced');
   await page.getByRole('button', { name: 'Copy Debug Info', exact: true }).click();
   assert.ok((await page.evaluate(() => navigator.clipboard.readText())).includes('reportVersion'));
   const download = page.waitForEvent('download'); await page.getByRole('button', { name: 'Export Debug Report', exact: true }).click();

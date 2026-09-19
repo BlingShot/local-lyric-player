@@ -1,3 +1,5 @@
+import { openSettingsTab, closeSettings, expandDebugPanel } from './regression-ui.mjs';
+import { selectMenu } from './select-menu.mjs';
 import { _electron as electron } from 'playwright';
 import assert from 'node:assert/strict';
 import { mkdir, mkdtemp, readFile, writeFile, readdir, stat, copyFile } from 'node:fs/promises';
@@ -10,21 +12,13 @@ const root = await mkdtemp(path.join(output, 'run-')), profile = path.join(root,
 await mkdir(profile); await writeFile(path.join(profile, 'config.json'), JSON.stringify({ version: 1, settings: { language: 'en' } }));
 const entry = path.join(root, 'entry.mjs');
 const bundle = pathToFileURL(path.resolve('release/win-unpacked/resources/app.asar/electron/app.mjs')).href;
-// Keep the packaged smoke window hidden, but use the same normal renderer as production.
+// Use an isolated, muted normal renderer for the real packaged DevTools check.
 // Electron DevTools do not represent a production-valid check against the separate offscreen test renderer.
 await writeFile(entry, (await readFile('scripts/desktop-smoke-entry.mjs', 'utf8')).replace('../electron/app.mjs', bundle));
 const env = { ...process.env, DESKTOP_TEST_PROFILE: profile, DESKTOP_TEST_DOWNLOADS: root };
 delete env.ELECTRON_RUN_AS_NODE; delete env.LOCAL_MUSIC_DEV_URL;
 let application, phase = 'launch'; const errors = [], checks = [];
-const openSettingsTab = async (page, name) => {
-  await page.getByRole('button', { name: 'Settings', exact: true }).click();
-  await page.getByRole('button', { name, exact: true }).click();
-};
-const closeSettings = async page => {
-  const close = page.locator('.ant-modal-close');
-  if (await close.isVisible()) await close.click();
-  await page.locator('.settings-window').waitFor({ state: 'hidden' });
-};
+const expectedVersion = JSON.parse(await readFile('package.json', 'utf8')).version;
 try {
   application = await electron.launch({ args: [entry], env, timeout: 30000 });
   const page = await application.firstWindow(); page.setDefaultTimeout(20000);
@@ -46,17 +40,22 @@ try {
   checks.push('Packaged preload/main IPC filters DEBUG by default; developer tools and lyric-surface diagnostics remain disabled in normal mode.');
 
   phase = 'real debug-mode persistence and lyrics-surface placement';
+  await selectMenu(page, 'Recorded log level', 'debug');
   await page.getByRole('checkbox', { name: 'Debug mode', exact: true }).check();
-  await page.waitForFunction(async () => (await window.localMusicDesktop.getConfig('diagnostics'))?.debug === true);
+  await page.waitForFunction(async () => { const saved = await window.localMusicDesktop.getConfig('diagnostics'); return saved?.debug === true && saved.level === 'debug'; });
+  await page.reload(); await page.getByRole('heading', { name: 'Local library', exact: true }).waitFor();
+  await openSettingsTab(page, 'Advanced');
+  assert.equal(await page.getByRole('checkbox', { name: 'Debug mode', exact: true }).isChecked(), true);
+  assert.equal((await page.getByRole('combobox', { name: 'Recorded log level', exact: true }).innerText()).trim(), 'DEBUG');
   // Diagnostics intentionally render only inside the Lyrics page. Do not expect
   // global readouts while the Settings modal is sitting on the library route.
   assert.equal(await page.locator('.debug-overlay').count(), 0);
   await closeSettings(page);
   await page.getByRole('button', { name: 'Lyrics', exact: true }).click();
   await page.locator('.lyrics-page').waitFor();
-  const globalOverlay = page.locator('.lyrics-page > .lyrics-debug-band .debug-overlay-global');
-  const audioOverlay = page.locator('.lyrics-page > .lyrics-debug-band .debug-overlay-audio');
-  await globalOverlay.waitFor(); await audioOverlay.waitFor();
+  const globalOverlay = page.locator('.lyrics-page .lyrics-content > .lyrics-debug-band .debug-overlay-global');
+  const audioOverlay = page.locator('.lyrics-page .lyrics-content > .lyrics-debug-band .debug-overlay-audio');
+  await expandDebugPanel(globalOverlay); await expandDebugPanel(audioOverlay);
   assert.equal(await page.locator('.offline-playing-bar .debug-overlay-audio').count(), 0);
   assert.ok((await globalOverlay.innerText()).includes('Memory'));
   assert.ok((await globalOverlay.innerText()).includes('FPS'));
@@ -106,7 +105,7 @@ try {
   assert.ok(saved && !saved.prevented, 'A real report download must be accepted by the trusted native session.');
   await copyFile(path.join(root, path.basename(saved.name)), path.join(output, 'debug-report.json'));
   const reportText = await readFile(path.join(output, 'debug-report.json'), 'utf8'), report = JSON.parse(reportText);
-  assert.equal(report.environment.version, '0.8.3'); assert.equal(report.debugMode, true);
+  assert.equal(report.environment.version, expectedVersion); assert.equal(report.debugMode, true);
   assert.ok(reportText.includes('decode-stage-recorded')); assert.ok(!reportText.includes('PrivateUser'));
   assert.ok(!reportText.includes('fixture-secret-not-real')); assert.ok(report.environment.desktop.processMemory.length > 0);
   checks.push('Real diagnostics, user-path/secret redaction, log-folder IPC and packaged report download pass.');
@@ -183,6 +182,8 @@ try {
   await page.reload(); await page.getByRole('heading', { name: 'Local library', exact: true }).waitFor();
   await openSettingsTab(page, 'Advanced');
   assert.equal(await page.getByRole('checkbox', { name: 'Debug mode', exact: true }).isChecked(), false);
+  assert.equal((await page.getByRole('combobox', { name: 'Recorded log level', exact: true }).innerText()).trim(), 'DEBUG');
+  assert.deepEqual(await page.evaluate(() => window.localMusicDesktop.getConfig('diagnostics')), { debug: false, level: 'debug' });
   assert.deepEqual(errors, []);
   await page.screenshot({ path: path.join(output, 'advanced.png') });
   const files = await readdir(path.join(profile, 'logs'));
