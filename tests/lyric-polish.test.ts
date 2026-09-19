@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { interludePresentation, INTERLUDE_EXIT_SECONDS } from '../src/lyrics/interludeProgress.ts';
+import { completedInterludeDots, interludePresentation, INTERLUDE_EXIT_SECONDS } from '../src/lyrics/interludeProgress.ts';
 import { rapidWord, wordVisualProgress } from '../src/lyrics/wordVisual.ts';
 import { LYRIC_IMAGE_THEMES, parseLyricImageTheme, lyricImageSelection } from '../src/lyrics/lyricImage.ts';
 import { parseAmllIndex, exactMetadata, selectAmllRevision } from '../src/lyrics/amllMatch.ts';
@@ -9,17 +9,50 @@ import { validLyricsAppearance } from '../src/lyrics/appearance.ts';
 import { newProject, parseProject } from '../src/studio/project.ts';
 import type { LyricLine } from '../src/lyrics/types.ts';
 
-test('interlude hands off before the next lyric and owns no space after its boundary', () => {
-  const snapshots = Array.from({ length: 65 }, (_, i) => interludePresentation(10, 20, 20 - INTERLUDE_EXIT_SECONDS + i / 100));
-  assert.equal(interludePresentation(10, 20, 9).space, 0);
-  assert.equal(interludePresentation(10, 20, 10).space, 0);
-  assert.equal(interludePresentation(10, 20, 11).space, 1);
-  assert.equal(interludePresentation(10, 20, 20).phase, 'hidden');
-  assert.equal(interludePresentation(10, 20, 21).space, 0);
-  for (let i = 1; i < snapshots.length; i++) assert.ok(snapshots[i].space <= snapshots[i - 1].space + 1e-9);
-  assert.ok(interludePresentation(10, 20, 19.99).space < .001);
-  assert.deepEqual(interludePresentation(10, 20, 19.8), interludePresentation(10, 20, 19.8), 'paused clock must not drift');
-  assert.equal(interludePresentation(10, 20, NaN).space, 0);
+test('interlude completes its dots, fades out, then reclaims space after its boundary', () => {
+  const start = 10, end = 20, finished = end + INTERLUDE_EXIT_SECONDS;
+  assert.equal(interludePresentation(start, end, 9).space, 0);
+  assert.equal(interludePresentation(start, end, start).space, 0);
+  assert.equal(interludePresentation(start, end, 11).space, 1);
+
+  // Do not hide or collapse before the final dot has had time to light.
+  const beforeEnd = interludePresentation(start, end, end - .01);
+  assert.equal(beforeEnd.phase, 'visible');
+  assert.equal(beforeEnd.space, 1);
+  assert.equal(beforeEnd.opacity, 1);
+  assert.equal(completedInterludeDots(start, end, end - .01), 2);
+  const boundary = interludePresentation(start, end, end);
+  assert.equal(boundary.phase, 'visible');
+  assert.equal(boundary.space, 1);
+  assert.equal(boundary.opacity, 1);
+  assert.equal(completedInterludeDots(start, end, end), 3);
+
+  // Ink fades while the row retains its height, rather than being squeezed out.
+  const earlyTime = end + INTERLUDE_EXIT_SECONDS * .25;
+  const early = interludePresentation(start, end, earlyTime);
+  assert.equal(early.phase, 'leaving');
+  assert.equal(early.space, 1);
+  assert.ok(early.opacity > 0 && early.opacity < 1);
+  const late = interludePresentation(start, end, end + INTERLUDE_EXIT_SECONDS * .8);
+  assert.equal(late.opacity, 0);
+  assert.ok(late.space > 0 && late.space < 1);
+
+  const snapshots = Array.from({ length: 65 }, (_, i) =>
+    interludePresentation(start, end, end + INTERLUDE_EXIT_SECONDS * i / 64));
+  for (const snapshot of snapshots) {
+    assert.ok(snapshot.space >= 0 && snapshot.space <= 1);
+    assert.ok(snapshot.opacity >= 0 && snapshot.opacity <= 1);
+  }
+  for (let i = 1; i < snapshots.length; i++) {
+    assert.ok(snapshots[i].space <= snapshots[i - 1].space + 1e-9);
+    assert.ok(snapshots[i].opacity <= snapshots[i - 1].opacity + 1e-9);
+  }
+  assert.equal(interludePresentation(start, end, finished).phase, 'hidden');
+  assert.equal(interludePresentation(start, end, finished).space, 0);
+  assert.equal(interludePresentation(start, end, finished).opacity, 0);
+  assert.equal(interludePresentation(start, end, 21).space, 0);
+  assert.deepEqual(interludePresentation(start, end, earlyTime), early, 'paused clock must not drift');
+  assert.equal(interludePresentation(start, end, NaN).space, 0);
 });
 test('reduced motion and backwards seeks have deterministic interlude presentation', () => {
   assert.equal(interludePresentation(10, 20, 15, true).opacity, 1);

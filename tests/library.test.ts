@@ -40,7 +40,25 @@ test('F06 collision comparison reads bounded chunks and checks differences beyon
   }
   assert.equal(await sameFileBytes(new BoundedBlob([bytes]),new BoundedBlob([other])),false);
 });
+test('renamed byte-identical files remain duplicates within a batch and against saved audio', async () => {
+  const original = audio(128, 'original.wav', 7);
+  const renamed = new File([new Uint8Array(128).fill(7)], 'renamed.MP3', { lastModified: 200 });
+  const first = await collectFiles([original, renamed], []);
+  assert.equal(first.tracks.length, 1);
+  assert.equal(first.duplicates, 1);
+  assert.equal(first.resolvedIds[0], first.resolvedIds[1]);
+  const again = await collectFiles([renamed], first.tracks, track => first.originals.get(track.id));
+  assert.equal(again.tracks.length, 0);
+  assert.equal(again.duplicates, 1);
+  assert.deepEqual(again.resolvedIds, [first.tracks[0].id]);
+});
 test('search is local, case insensitive and treats URL-looking names as text', async () => {
-  const { tracks } = await collectFiles([audio(), audio(128,'https-example.MP3')], []);
-  assert.equal(filterTracks(tracks, '  wav ').length, 1); assert.equal(filterTracks(tracks, 'missing').length, 0); assert.equal(filterTracks(tracks, '').length, 2);
+  // Search needs two distinct recordings, not renamed copies of identical bytes.
+  const { tracks, duplicates } = await collectFiles([audio(), audio(128, 'https-example.MP3', 1)], []);
+  assert.equal(duplicates, 0);
+  assert.equal(tracks.length, 2);
+  assert.deepEqual(filterTracks(tracks, '  wav '), [tracks[0]]);
+  assert.deepEqual(filterTracks(tracks, '  HTTPS-EXAMPLE '), [tracks[1]]);
+  assert.equal(filterTracks(tracks, 'missing').length, 0);
+  assert.deepEqual(filterTracks(tracks, ''), tracks);
 });
