@@ -137,8 +137,14 @@ try {
 
   phase = 'different songs queued across routes';
   const navigate = async track => {
+    // Sidebar dropdowns survive route changes. Finish the preceding menu's exit
+    // before reopening one, otherwise its leave motion can intercept this click.
+    const analyzeMenu = page.getByRole('menuitem', { name: 'Analyze', exact: true });
+    await analyzeMenu.waitFor({ state: 'hidden' });
     await page.getByRole('button', { name: `Play saved track ${track.name}`, exact: true }).click({ button: 'right' });
-    await page.getByRole('menuitem', { name: 'Analyze', exact: true }).click();
+    await analyzeMenu.click();
+    await page.waitForURL(`${origin}/analyze/${encodeURIComponent(track.id)}`);
+    await analyzeMenu.waitFor({ state: 'hidden' });
     await page.getByRole('button', { name: 'Analyze BPM & Key', exact: true }).waitFor();
   };
   const long = tracks.find(track => track.fileName === 'long-480.wav'); await navigate(long);
