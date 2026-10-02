@@ -19,7 +19,7 @@ export function useResolvedLyrics(track?: LocalTrack) {
   useEffect(() => {
     if (!track || !track.embeddedLyricsChecked || track.unavailable) return;
     pruneJobs();
-    const key = JSON.stringify([track.id, track.name, track.artist, track.album, track.duration]);
+    const key = JSON.stringify([track.id, track.name, track.artist, track.album, track.duration, track.isrc, track.spotifyId]);
     let job = jobs.get(key);
     if (!job || job.controller.signal.aborted || job.done && job.until < Date.now()) {
       if (job) { clearTimeout(job.dismiss); clearTimeout(job.expire); }
@@ -37,7 +37,7 @@ export function useResolvedLyrics(track?: LocalTrack) {
     const current = job, listener = (status: string) => setRemote({ id: track.id, status });
     current.listeners.add(listener); listener(current.status);
     return () => { current.listeners.delete(listener); if (!current.listeners.size && current.done) pruneJobs(); if (!current.listeners.size && !current.done) { current.controller.abort(); clearTimeout(current.dismiss); clearTimeout(current.expire); if (jobs.get(key) === current) jobs.delete(key); } };
-  }, [track?.id, track?.name, track?.artist, track?.album, track?.duration, track?.embeddedLyricsChecked, track?.unavailable, revision]);
+  }, [track?.id, track?.name, track?.artist, track?.album, track?.duration, track?.isrc, track?.spotifyId, track?.embeddedLyricsChecked, track?.unavailable, revision]);
   const retryRemote = () => { clearJobs(); window.dispatchEvent(new Event('spotify-session-updated')); };
   return { ...saved, remoteStatus: remote.id === track?.id ? remote.status : '', retryRemote };
 }

@@ -15,6 +15,7 @@ declare global {
   interface Window {
     queryLocalFonts?: () => Promise<{ family: string; fullName: string; postscriptName: string; style: string }[]>;
     localMusicDesktop?: {
+      readFileArtwork?(file: File): Promise<Uint8Array | undefined>;
       nativeAudioDevices(): Promise<{ name: string; description: string }[]>;
       nativeAudioMeter(enabled: boolean): Promise<void>;
       nativeAudioEnergy(): Promise<number>;

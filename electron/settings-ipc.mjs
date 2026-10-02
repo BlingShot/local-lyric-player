@@ -1,4 +1,5 @@
 import { registerNativeAudio } from './native-audio-ipc.mjs';
+import { readFileArtwork } from './file-artwork.mjs';
 import { shell, app, clipboard } from 'electron';
 import { prepareClipboardReport } from './debug-clipboard.mjs';
 import { mkdir } from 'node:fs/promises';
@@ -14,7 +15,8 @@ export function registerSettingsIpc(win, config, folders, devUrl, logger) {
     if (event.sender !== win.webContents || event.senderFrame !== win.webContents.mainFrame || !isAppUrl(event.senderFrame.url, devUrl)) throw new Error('Untrusted settings request.');
     return fn(...args);
   });
-  registerNativeAudio(win, config, handle, logger);
+  if (process.platform === 'win32') registerNativeAudio(win, config, handle, logger);
+  if (process.platform === 'darwin') handle('desktop-file:artwork', readFileArtwork);
   const spotify = new SpotifyService(config, url => shell.openExternal(url));
   handle('spotify:info', () => spotify.info());
   handle('spotify:login', clientId => spotify.login(clientId));

@@ -12,6 +12,9 @@ export interface LocalTrack {
   lastModified: number;
   audioRevision?: string;
   metadataRevision?: string;
+  isrc?: string;
+  spotifyId?: string;
+  recordingMetadataVersion?: number;
   analysisMetadata?: AudioAnalysisMetadata;
   duration?: number;
   durationChecked?: boolean;
@@ -26,7 +29,7 @@ export interface LocalTrack {
   compilation?: boolean;
   albumGroup?: string;
   tagWarning?: string;
-  artworkSource?: 'embedded' | 'custom';
+  artworkSource?: 'embedded' | 'custom' | 'file-icon';
   artworkType?: 'front' | 'other';
   coverUrl?: string;
   unavailable?: boolean;

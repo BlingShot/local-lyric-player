@@ -20,8 +20,8 @@ export function readAudioAnalysisMetadata(file: File, signal: AbortSignal): Prom
   });
 }
 
-export function readAudioTags(file: File, durationOnly = false): Promise<AudioTagsResult> {
-  return new Promise(resolve => {
+export async function readAudioTags(file: File, durationOnly = false): Promise<AudioTagsResult> {
+  const result = await new Promise<AudioTagsResult>(resolve => {
     const worker = new Worker(new URL('./metadata.worker.ts', import.meta.url), { type: 'module' });
     const finish = (result: AudioTagsResult) => {
       clearTimeout(timeout); worker.terminate(); resolve(result);
@@ -46,6 +46,17 @@ export function readAudioTags(file: File, durationOnly = false): Promise<AudioTa
     worker.onerror = event => { event.preventDefault(); fallback(); };
     worker.postMessage({ file, durationOnly });
   });
+  if (!durationOnly && !result.cover && window.localMusicDesktop?.readFileArtwork) {
+    try {
+      const bytes = await window.localMusicDesktop.readFileArtwork(file);
+      if (bytes?.length && bytes.length <= 20 * 1024 * 1024) {
+        const cover = new Blob([new Uint8Array(bytes)], { type: 'image/png' });
+        const bitmap = await createImageBitmap(cover); bitmap.close();
+        result.cover = cover; result.tags.artworkSource = 'file-icon';
+      }
+    } catch { /* Keep usable tags and audio even when a custom icon is unavailable. */ }
+  }
+  return result;
 }
 
 export async function validateCover(file: File) {

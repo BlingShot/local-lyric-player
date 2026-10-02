@@ -2,23 +2,26 @@ import { parseBlob } from 'music-metadata';
 import type { LocalTrack } from './importFiles';
 import { extractEmbeddedLrc, extractEmbeddedTtml } from '../lyrics/embedded';
 import { analysisMetadata } from './analysisMetadata';
+import { recordingMetadata } from './recordingMetadata';
 
 self.onmessage = async (event: MessageEvent<{ file: File; durationOnly?: boolean; analysisOnly?: boolean }>) => {
   const { file, durationOnly, analysisOnly } = event.data;
   try {
     const metadata = await parseBlob(file, { duration: true, skipCovers: durationOnly || analysisOnly });
     const audioMetadata = analysisMetadata(metadata);
+    const recording = recordingMetadata(metadata);
     if (analysisOnly) { self.postMessage({ metadata: audioMetadata }); return; }
     const { common, format } = metadata;
     const embedded = extractEmbeddedLrc(metadata);
     const duration = format.duration && Number.isFinite(format.duration) && format.duration > 0 ? format.duration : undefined;
-    if (durationOnly) { self.postMessage({ tags: { duration, durationChecked: true, analysisMetadata: audioMetadata, embeddedLyricsChecked: true, lyricsWarning: embedded.warning }, lyrics: embedded.lyrics, ttmlSource: extractEmbeddedTtml(metadata) }); return; }
+    if (durationOnly) { self.postMessage({ tags: { ...recording, duration, durationChecked: true, analysisMetadata: audioMetadata, embeddedLyricsChecked: true, lyricsWarning: embedded.warning }, lyrics: embedded.lyrics, ttmlSource: extractEmbeddedTtml(metadata) }); return; }
     const text = (value?: string) => value?.trim() || undefined;
     const positive = (value?: number | null) => value && Number.isInteger(value) && value > 0 ? value : undefined;
     const tags: Partial<LocalTrack> = {
+      ...recording,
       name: text(common.title) || file.name, fileName: file.name,
-      artist: text(common.artist) || common.artists?.filter(Boolean).join(', ') || undefined,
-      album: text(common.album), albumArtist: text(common.albumartist) || common.albumartists?.filter(Boolean).join(', ') || undefined,
+      artist: text(common.artists?.flatMap(value => value.split(/\s*[;；]\s*/)).filter(Boolean).join(', ')) || text(common.artist),
+      album: text(common.album), albumArtist: text(common.albumartists?.flatMap(value => value.split(/\s*[;；]\s*/)).filter(Boolean).join(', ')) || text(common.albumartist),
       trackNumber: positive(common.track.no), discNumber: positive(common.disk.no),
       releaseDate: text(common.releasedate) || text(common.date) || (common.year ? String(common.year) : undefined),
       compilation: common.compilation,

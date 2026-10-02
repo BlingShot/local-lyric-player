@@ -1,6 +1,13 @@
 // Electron requires CommonJS for a sandboxed preload. Expose only these fixed operations.
-const { contextBridge, ipcRenderer } = require('electron');
+const { contextBridge, ipcRenderer, webUtils } = require('electron');
 contextBridge.exposeInMainWorld('localMusicDesktop', Object.freeze({
+  ...(process.platform === 'darwin' ? {
+    readFileArtwork: file => {
+      const path = webUtils.getPathForFile(file);
+      return path ? ipcRenderer.invoke('desktop-file:artwork', path) : Promise.resolve(undefined);
+    },
+  } : {}),
+  ...(process.platform === 'win32' ? {
   nativeAudioDevices: () => ipcRenderer.invoke('native-audio:devices'),
   nativeAudioMeter: enabled => ipcRenderer.invoke('native-audio:meter', enabled),
   nativeAudioEnergy: () => ipcRenderer.invoke('native-audio:energy'),
@@ -8,6 +15,7 @@ contextBridge.exposeInMainWorld('localMusicDesktop', Object.freeze({
   nativeAudioLoad: value => ipcRenderer.invoke('native-audio:load', value),
   nativeAudioCommand: (command, value, context) => ipcRenderer.invoke('native-audio:command', command, value, context),
   onNativeAudioState: callback => { const listener = (_event, value) => callback(value); ipcRenderer.on('native-audio:state', listener); return () => ipcRenderer.removeListener('native-audio:state', listener); },
+  } : {}),
   spotifyInfo: () => ipcRenderer.invoke('spotify:info'),
   spotifyLogin: clientId => ipcRenderer.invoke('spotify:login', clientId),
   spotifyLogout: () => ipcRenderer.invoke('spotify:logout'),

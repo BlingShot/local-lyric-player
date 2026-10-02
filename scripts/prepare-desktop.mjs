@@ -11,6 +11,7 @@ header.writeUInt16LE(1, 10); header.writeUInt16LE(32, 12);
 header.writeUInt32LE(png.length, 14); header.writeUInt32LE(22, 18);
 await mkdir('desktop', { recursive: true });
 await writeFile('desktop/app.ico', Buffer.concat([header, png]));
+await writeFile('desktop/app-mac.png', new Resvg(await readFile('public/images/app-logo.svg', 'utf8'), { fitTo: { mode: 'width', value: 1024 } }).render().asPng());
 await writeFile('build/images/app-icon.png', png);
 const stage = path.resolve('.cache/desktop-app');
 if (path.dirname(stage) !== path.resolve('.cache')) throw new Error('Invalid desktop staging path.');

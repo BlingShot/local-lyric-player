@@ -9,6 +9,7 @@ import { uiActions } from '../../store/slices/offlineUi';
 import { setThemeMode, useAppTheme, type ThemeMode } from '../../theme';
 import { setGlassSurface, useSurface } from '../../theme/surface';
 import { useConfigReadError } from '../../desktop/config';
+import { TransferSettings } from './Transfer';
 import { AutoImportFolder } from './AutoImportFolder';
 import { NormalizationSettings } from './Normalization';
 import { DeepSeekSettings } from './DeepSeek';
@@ -57,7 +58,7 @@ function SettingsContent() {
     </div>
     <div hidden={tab !== 'Playback'} className='settings-category'><header><h2>{t('Playback')}</h2></header><section><h3>{t('Volume')}</h3><VolumeControl /></section><AudioOutputSettings active={tab === 'Playback'} /><NormalizationSettings /><ListeningTimeSettings /></div>
     <div hidden={tab !== 'Online services'} className='settings-category'><header><h2>{t('Online services')}</h2></header><SpotifySettings /><DeepSeekSettings /></div>
-    <div hidden={tab !== 'Storage'} className='settings-category'><header><h2>{t('Storage')}</h2></header><AutoImportFolder /><DuplicateTracksSettings /><DesktopStorageSettings /></div>
+    <div hidden={tab !== 'Storage'} className='settings-category'><header><h2>{t('Storage')}</h2></header><TransferSettings /><AutoImportFolder /><DuplicateTracksSettings /><DesktopStorageSettings /></div>
     <div hidden={tab !== 'Advanced'} className='settings-category'><header><h2>{t('Advanced')}</h2></header><DiagnosticsSettings /></div>
   </div></div>;
 }

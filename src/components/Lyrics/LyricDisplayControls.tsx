@@ -9,7 +9,7 @@ export function LyricDisplayControls({ compact = false, capabilities }: { compac
   const controls = <div className={compact ? 'lyric-display-controls ant-dropdown-menu' : 'lyric-display-controls'}>
     <label><input type='checkbox' disabled={!!has && !has.hasWordTiming} checked={appearance.wordByWord} onChange={e => update({ wordByWord: e.target.checked })} />{t('Word-by-word highlighting')}</label>
     <label><input type='checkbox' disabled={!!has && !has.hasMultiplePerformers} checked={appearance.performerAlignment} onChange={e => update({ performerAlignment: e.target.checked })} />{t('Align lyrics by performer')}</label>
-    <label><input type='checkbox' disabled={!!has && !has.hasMultiplePerformers} checked={appearance.showVocalLabels} onChange={e => update({ showVocalLabels: e.target.checked })} />{t('Show performer labels')}</label>
+    <label><input type='checkbox' checked={appearance.showVocalLabels} onChange={e => update({ showVocalLabels: e.target.checked })} />{t('Show performer labels')}</label>
     <label><input type='checkbox' disabled={!!has && !has.hasTranslations} checked={appearance.showTranslations !== false} onChange={e => update({ showTranslations: e.target.checked })} />{t('Show translations')}</label>
     {error && <p role='alert'>{t(error)}</p>}
   </div>;

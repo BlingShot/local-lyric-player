@@ -64,11 +64,12 @@ export async function resolveAmll(track: LocalTrack, signal: AbortSignal, onStat
     const before = await readLyrics(track.id); fallback = before?.origin === 'embedded' ? 'Embedded' : before?.document.format || 'none';
     trace.step('Cache', before ? 'saved-lyrics-hit' : 'saved-lyrics-miss', { format: before?.document.format, origin: before?.origin });
     if (before?.document.format === 'ttml' || before?.alternates?.some(variant => variant.document.format === 'ttml')) { trace.step('Apply', 'keep-existing-ttml', { origin: before.origin }); trace.finish('cached'); return; }
-    let match: { id: string; isrc: string } | null = null;
+    let match: { id: string; isrc: string } | null = track.isrc || track.spotifyId
+      ? { id: track.spotifyId || '', isrc: track.isrc || '' } : null;
     const desktop = window.localMusicDesktop; let spotifyError = false;
     trace.step('ISRC', 'start');
     try {
-      if (desktop && (await desktop.spotifyInfo()).connected) {
+      if (!match && desktop && (await desktop.spotifyInfo()).connected) {
         signal.throwIfAborted(); status('Searching Spotify ISRC...');
         match = await desktop.spotifyMatch({ name: track.name, artist: track.artist, duration: track.duration });
       }
@@ -88,9 +89,10 @@ export async function resolveAmll(track: LocalTrack, signal: AbortSignal, onStat
       data = await attempt('get', { spotifyId: match.id, format: 'ttml' });
       if (data && !hasId(data.spotifyIds, match.id)) throw new Error('AMLL returned a mismatched Spotify recording. Local lyrics are unchanged.');
     }
-    if (!data && track.name?.trim() && track.artist?.trim()) {
+    if (!data && (match || (track.name?.trim() && track.artist?.trim()))) {
       status('Searching AMLL by title and artist...');
-      const queries: Record<string, string>[] = [{ musicName: track.name.trim(), artistName: artistNames(track.artist)[0] || track.artist.trim() }, { musicName: track.name.trim() }];
+      const queries: Record<string, string>[] = track.name?.trim() && track.artist?.trim()
+        ? [{ musicName: track.name.trim(), artistName: artistNames(track.artist)[0] || track.artist.trim() }, { musicName: track.name.trim() }] : [];
       for (const query of queries) {
         const items: AmllEntry[] = []; let complete = false;
         for (let page = 1; page <= 5; page++) {
@@ -104,7 +106,7 @@ export async function resolveAmll(track: LocalTrack, signal: AbortSignal, onStat
         trace.step('Match', candidate ? 'selected' : 'no-selection', { complete, candidateCount: items.length, selectedId: candidate?.id, candidates: items.slice(0, 20).map(item => ({ id: item.id, filename: item.filename, exact: exactMetadata(item, track.name, track.artist || '') })) });
         if (candidate) {
           status('Downloading AMLL TTML...'); data = await attempt('get', { id: String(candidate.id), format: 'ttml' });
-          if (data && (String(data.id) !== String(candidate.id) || !exactMetadata(data, track.name, track.artist))) throw new Error('AMLL returned a mismatched recording. Local lyrics are unchanged.');
+          if (data && (String(data.id) !== String(candidate.id) || !exactMetadata(data, track.name, track.artist || ''))) throw new Error('AMLL returned a mismatched recording. Local lyrics are unchanged.');
           if (data) break;
         } else if (complete && items.some(entry => exactMetadata(entry, track.name, track.artist || ''))) {
           finishFallback('ambiguous-recording', 'AMLL has multiple recording matches. Using local lyrics.'); return;
@@ -116,7 +118,7 @@ export async function resolveAmll(track: LocalTrack, signal: AbortSignal, onStat
         const items = await repositoryIndex(signal, trace);
         const identified = match?.isrc ? items.filter(item => hasId(item.isrcs, match!.isrc)) : [];
         const byId = identified.length ? identified : match?.id ? items.filter(item => hasId(item.spotifyIds, match!.id)) : [];
-        const candidates = byId.length ? byId : items, candidate = selectAmllRevision(candidates, track);
+        const candidates = byId.length ? byId : items, candidate = selectAmllRevision(candidates, { ...track, isrc: match?.isrc, spotifyId: match?.id });
         trace.step('Match', 'repository', { candidateCount: candidates.length, exactCount: candidates.filter(item => exactMetadata(item, track.name, track.artist || '')).length, selectedId: candidate?.id, filename: candidate?.filename });
         if (candidate?.filename) {
           const source = await remoteText(REPOSITORY + 'raw-lyrics/' + encodeURIComponent(candidate.filename), signal, trace);
@@ -130,7 +132,7 @@ export async function resolveAmll(track: LocalTrack, signal: AbortSignal, onStat
     status('Downloading AMLL TTML...');
     if (data.format !== 'ttml' || typeof data.lyrics !== 'string') throw new Error('AMLL returned invalid lyrics. Local lyrics are unchanged.');
     trace.step('Match', 'validated', { id: data.id, isrc: match?.isrc });
-    const source = data.lyrics, fileName = typeof data.filename === 'string' && /^[\w.-]+\.ttml$/.test(data.filename) ? data.filename : 'amll.ttml';
+    const source = data.lyrics, fileName = typeof data.filename === 'string' && /^[\w,.-]+\.ttml$/.test(data.filename) ? data.filename : 'amll.ttml';
     const started = performance.now(); trace.step('Parse', 'start', { fileName, characters: source.length, parserVersion: LYRICS_PARSER_VERSION });
     let document: ReturnType<typeof parseLyrics>;
     try { document = parseLyrics(source, fileName); if (!document.lines.length) throw new Error('AMLL returned empty lyrics.'); }

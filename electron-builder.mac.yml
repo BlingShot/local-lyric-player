@@ -1,0 +1,13 @@
+extends: ./electron-builder.yml
+afterPack: ./scripts/after-pack-mac.mjs
+# The bundled mpv/WASAPI helper is Windows-only; macOS uses Chromium audio.
+mac:
+  target:
+    - target: dmg
+      arch: [arm64]
+  category: public.app-category.music
+  icon: desktop/app-mac.png
+  artifactName: Lyric-Player-${version}-macOS-${arch}.${ext}
+  identity: '-'
+  hardenedRuntime: false
+  notarize: false

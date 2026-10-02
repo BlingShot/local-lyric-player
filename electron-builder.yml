@@ -13,10 +13,6 @@ files:
   - '!**/*.map'
   - '!**/test-results/**/*'
   - '!**/*.log'
-extraResources:
-  - from: desktop/native
-    to: native
-    filter: ['mpv.exe', 'vulkan-1.dll', '*.txt', '*.md']
 asar: true
 compression: maximum
 # Match the two interface languages; preserve ICU. Text uses fonts on the computer.
@@ -24,6 +20,10 @@ electronLanguages: [en-US, zh-CN]
 electronDist: node_modules/electron/dist
 npmRebuild: false
 win:
+  extraResources:
+    - from: desktop/native
+      to: native
+      filter: ['mpv.exe', 'vulkan-1.dll', '*.txt', '*.md']
   target:
     - target: portable
       arch: [x64]

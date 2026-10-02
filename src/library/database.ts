@@ -122,7 +122,8 @@ export async function saveTracks(items: readonly SavedTrack[]) {
 // Stable IDs and source identity are deliberately absent from the patch whitelist.
 const patchKeys = ['name', 'artist', 'album', 'albumArtist', 'trackNumber', 'discNumber',
   'releaseDate', 'compilation', 'albumGroup', 'artworkSource', 'duration', 'durationChecked',
-  'lastPlayedAt', 'analysisMetadata', 'embeddedLyricsChecked', 'lyricsWarning', 'size', 'audioRevision'] as const;
+  'lastPlayedAt', 'analysisMetadata', 'embeddedLyricsChecked', 'lyricsWarning', 'size', 'audioRevision',
+  'isrc', 'spotifyId', 'recordingMetadataVersion'] as const;
 export type TrackPatch = Partial<Pick<TrackRecord, typeof patchKeys[number]>>;
 export interface TrackMutation {
   id: string; patch: TrackPatch; expected?: Partial<TrackRecord>;

@@ -77,6 +77,7 @@ async function readSavedDuration(id: string, audio: Blob) {
   if (!latest) return;
   await saveTrackPatch(id, { ...(!latest.duration ? { duration: tags.duration, durationChecked: true } : {}),
     analysisMetadata: tags.analysisMetadata, embeddedLyricsChecked: true,
+    ...(tags.recordingMetadataVersion ? { isrc: tags.isrc, spotifyId: tags.spotifyId, recordingMetadataVersion: tags.recordingMetadataVersion } : {}),
     ...(!track.embeddedLyricsChecked ? { lyricsWarning: tags.lyricsWarning } : {}) },
     !track.embeddedLyricsChecked ? embeddedRecord(id, track.fileName || track.name, lyrics, ttml) : undefined);
 }
@@ -85,7 +86,7 @@ async function backfillDurations() {
   for (const [id, audio] of audioCopies) {
     if (stopped) return;
     const track = store.getState().library.tracks.find(item => item.id === id);
-    if (track && ((!track.duration && !track.durationChecked) || !track.embeddedLyricsChecked || !track.analysisMetadata?.technicalVersion)) await readSavedDuration(id, audio);
+    if (track && ((!track.duration && !track.durationChecked) || !track.embeddedLyricsChecked || !track.analysisMetadata?.technicalVersion || !track.recordingMetadataVersion)) await readSavedDuration(id, audio);
   }
 }
 
@@ -267,6 +268,26 @@ export function importAudioFiles(files: readonly File[], onResolved?: (ids: read
         lyrics: embeddedRecord(track.id, file.name, lyrics, ttml) });
     }
     if (saved.length) await saveTracks(saved);
+    // Re-selecting an existing file can recover macOS icon artwork which is not
+    // carried by its IndexedDB audio Blob. Keep edited details and custom covers.
+    const refreshed = new Set<string>();
+    for (const [index, id] of result.resolvedIds.entries()) {
+      const existing = id && store.getState().library.tracks.find(track => track.id === id);
+      if (!existing || refreshed.has(existing.id) || (existing.recordingMetadataVersion && existing.coverUrl && !existing.artist?.includes(';'))) continue;
+      refreshed.add(existing.id);
+      const { tags, cover: discoveredCover } = await readAudioTags(files[index]);
+      const cover = !existing.coverUrl ? discoveredCover : undefined;
+      const patch: TrackPatch = {};
+      if (tags.recordingMetadataVersion) Object.assign(patch, { isrc: tags.isrc, spotifyId: tags.spotifyId, recordingMetadataVersion: tags.recordingMetadataVersion });
+      for (const key of ['artist', 'albumArtist'] as const) {
+        if (existing[key]?.split(/\s*[;；]\s*/).join(', ') === tags[key]) patch[key] = tags[key];
+      }
+      if (cover) patch.artworkSource = tags.artworkSource;
+      const [updated] = await patchExistingTracks([{ id: existing.id, patch, cover }]);
+      if (updated) store.dispatch(libraryActions.updateTracks([{ ...existing, ...updated,
+        coverUrl: cover ? setCover(existing.id, cover) : existing.coverUrl,
+        tagWarning: cover && existing.tagWarning === 'Saved artwork is unavailable. Choose a local cover image.' ? undefined : existing.tagWarning }]));
+    }
     const tracks = saved.map(item => {
       audioCopies.set(item.track.id, item.audio!);
       return { ...item.track, coverUrl: setCover(item.track.id, item.cover) };

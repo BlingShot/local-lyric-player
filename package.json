@@ -1,6 +1,6 @@
 {
   "name": "lyric-player",
-  "version": "0.8.4",
+  "version": "0.8.7",
   "private": true,
   "type": "module",
   "scripts": {
@@ -31,6 +31,8 @@
     "desktop:dev": "node scripts/desktop-dev.mjs",
     "desktop:pack": "npm run desktop:prepare && electron-builder --config electron-builder.yml --win --x64 --dir --publish never",
     "desktop:build": "npm run desktop:prepare && electron-builder --config electron-builder.yml --win portable --x64 --publish never",
+    "desktop:pack:mac": "npm run desktop:prepare && node scripts/build-mac.mjs --dir",
+    "desktop:build:mac": "npm run desktop:prepare && node scripts/build-mac.mjs",
     "test:desktop": "node scripts/test-desktop.mjs",
     "test:desktop-polish": "node scripts/test-desktop-polish.mjs",
     "desktop:prepare": "install-electron --no && npm run build && node scripts/prepare-desktop.mjs",

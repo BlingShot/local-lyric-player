@@ -17,10 +17,13 @@ export function exactMetadata(entry: AmllEntry, name: string, artist: string) {
 function recordingKeys(entry: AmllEntry) {
   return ['isrcs', 'spotifyIds', 'ncmMusicIds', 'qqMusicIds', 'appleMusicIds'].flatMap(key => strings(entry[key as keyof AmllEntry]).map(id => `${key}:${id.toUpperCase()}`));
 }
-export function selectAmllRevision(items: AmllEntry[], track: { name: string; artist?: string; album?: string }) {
-  let exact = items.filter(entry => exactMetadata(entry, track.name, track.artist || ''));
+export function selectAmllRevision(items: AmllEntry[], track: { name: string; artist?: string; album?: string; isrc?: string; spotifyId?: string }) {
+  const byIsrc = track.isrc ? items.filter(entry => strings(entry.isrcs).some(id => id.toUpperCase() === track.isrc!.toUpperCase())) : [];
+  const bySpotify = track.spotifyId ? items.filter(entry => strings(entry.spotifyIds).includes(track.spotifyId!)) : [];
+  const identified = byIsrc.length ? byIsrc : bySpotify;
+  let exact = identified.length ? identified : items.filter(entry => exactMetadata(entry, track.name, track.artist || ''));
   const album = normalize(track.album || '');
-  if (album) { const sameAlbum = exact.filter(entry => strings(entry.albumNames).some(a => normalize(a) === album)); if (sameAlbum.length) exact = sameAlbum; }
+  if (album && !identified.length) { const sameAlbum = exact.filter(entry => strings(entry.albumNames).some(a => normalize(a) === album)); if (sameAlbum.length) exact = sameAlbum; }
   if (!exact.length) return undefined;
   // Multiple revisions are safe only when connected by a shared recording identifier.
   const connected = new Set([exact[0]]), keys = new Set(recordingKeys(exact[0]));
@@ -37,7 +40,7 @@ export function parseAmllIndex(source: string): AmllEntry[] {
   if (rows.length > 100000) throw new Error('AMLL index is too large.');
   return rows.map(row => {
     const item = JSON.parse(row);
-    if (!item || typeof item.rawLyricFile !== 'string' || !/^[\w-]+\.ttml$/.test(item.rawLyricFile) || !Array.isArray(item.metadata)) throw new Error('AMLL returned an invalid repository index.');
+    if (!item || typeof item.rawLyricFile !== 'string' || !/^[\w,.-]+\.ttml$/.test(item.rawLyricFile) || !Array.isArray(item.metadata)) throw new Error('AMLL returned an invalid repository index.');
     const fields: Record<string, string[]> = Object.create(null);
     for (const field of item.metadata) {
       if (!Array.isArray(field) || field.length !== 2 || typeof field[0] !== 'string' || !Array.isArray(field[1]) || field[1].some((v: unknown) => typeof v !== 'string')) throw new Error('AMLL returned an invalid repository index.');

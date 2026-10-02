@@ -1,6 +1,6 @@
 # Lyric Player
 
-一个**离线优先的本地音乐播放器与歌词管理工具**，基于 React + Vite + Redux Toolkit 构建，支持 Web 运行和 Electron Windows 桌面端。
+一个**离线优先的本地音乐播放器与歌词管理工具**，基于 React + Vite + Redux Toolkit 构建，支持 Web 运行和 Electron Windows / macOS 桌面端。
 
 项目主要围绕：
 
@@ -133,7 +133,22 @@ npm run desktop:dev
 npm run desktop:build
 ```
 
-当前桌面构建目标为 **Windows x64 Portable**。
+`desktop:build` 构建 **Windows x64 Portable**。
+
+在 Apple Silicon Mac 上生成 macOS 应用和安装包（运行要求 macOS 13 或更高版本）：
+
+```bash
+npm ci
+npm run desktop:build:mac
+```
+
+采用 LZMA 压缩的 DMG 安装包输出在 `release/`；独立 `.app` 的临时构建路径会打印在终端中。应用在系统临时目录构建，避免 iCloud 同步目录添加 Finder 属性导致签名失败。
+macOS 安装包限制在 100 MB（十进制）以下，构建时自动检查；Windows 专用音频组件只随 Windows 版本发布。
+
+打开 DMG 后将应用拖入 Applications 即可安装。macOS 使用 Chromium 音频与系统默认输出；WASAPI 独占模式仅支持 Windows。
+当前 macOS 构建采用本地 ad-hoc 签名，未使用 Apple Developer ID 签名或公证；分发到其他电脑时可能需要在“系统设置 → 隐私与安全性”中允许打开。
+
+验证打包后的 macOS 应用代码：`DESKTOP_TEST_RESOURCES="构建路径/Lyric Player.app/Contents/Resources" npm run test:desktop -- --packaged`。
 
 ## Main Routes
 

@@ -128,10 +128,11 @@ export async function startDesktop({ show = true, userData, singleInstance = tru
     if (event.sender !== win.webContents || event.senderFrame !== win.webContents.mainFrame ||
         !isAppUrl(event.senderFrame.url, devUrl) || !['dark', 'light'].includes(mode)) throw new Error('Invalid window theme request.');
     // Let the page's current surface show through the native caption controls.
-    win.setTitleBarOverlay({ color: '#00000000',
+    if (process.platform !== 'darwin') win.setTitleBarOverlay({ color: '#00000000',
       symbolColor: mode === 'light' ? '#62676e' : '#b3b3b3', height: 60 });
   });
   Menu.setApplicationMenu(Menu.buildFromTemplate([
+    ...(process.platform === 'darwin' ? [{ role: 'appMenu' }] : []),
     { label: 'File', submenu: [{ role: 'close' }] },
     { label: 'Edit', submenu: [{ role: 'undo' }, { role: 'redo' }, { type: 'separator' },
       { role: 'cut' }, { role: 'copy' }, { role: 'paste' }, { role: 'selectAll' }] },

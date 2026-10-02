@@ -6,7 +6,7 @@ globalThis.desktopWindowEvents = [];
 globalThis.desktopDownloads = [];
 // DevTools are a visible-window feature in production. Keep this packaged smoke test
 // faithful to that environment instead of testing DevTools against a hidden BrowserWindow.
-startDesktop({ show: true, userData: process.env.DESKTOP_TEST_PROFILE, singleInstance: false,
+startDesktop({ show: process.env.DESKTOP_TEST_HIDDEN !== '1', userData: process.env.DESKTOP_TEST_PROFILE, singleInstance: false,
   onWindow(win) {
     win.webContents.setAudioMuted(true);
     for (const name of ['show', 'focus', 'restore']) win.on(name, () => globalThis.desktopWindowEvents.push(name));

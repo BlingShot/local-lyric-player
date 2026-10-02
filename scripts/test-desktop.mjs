@@ -9,11 +9,14 @@ const root = path.resolve('test-results/desktop');
 await mkdir(root, { recursive: true });
 const profile = await mkdtemp(path.join(root, 'profile-'));
 const downloads = await mkdtemp(path.join(root, 'downloads-'));
-const env = { ...process.env, DESKTOP_TEST_PROFILE: profile, DESKTOP_TEST_DOWNLOADS: downloads };
+const env = { ...process.env, DESKTOP_TEST_PROFILE: profile, DESKTOP_TEST_DOWNLOADS: downloads, DESKTOP_TEST_HIDDEN: '1' };
 const packaged = process.argv.includes('--packaged');
 let entry = path.resolve('scripts/desktop-smoke-entry.mjs');
 if (packaged) {
-  const bundle = pathToFileURL(path.resolve('release/win-unpacked/resources/app.asar/electron/app.mjs')).href;
+  const resources = process.env.DESKTOP_TEST_RESOURCES || (process.platform === 'darwin'
+    ? `release/mac-${process.arch}/Lyric Player.app/Contents/Resources`
+    : 'release/win-unpacked/resources');
+  const bundle = pathToFileURL(path.resolve(resources, 'app.asar/electron/app.mjs')).href;
   entry = path.join(root, 'packaged-entry.mjs');
   await writeFile(entry, (await readFile('scripts/desktop-smoke-entry.mjs', 'utf8')).replace('../electron/app.mjs', bundle));
 }
@@ -27,6 +30,12 @@ const launch = async () => {
   page.on('pageerror', error => errors.push(error.message));
   page.on('request', request => { if (/^https?:/.test(request.url())) external.push(request.url()); });
   await page.waitForURL('localmusic://app/');
+  // Keep English locators stable on computers whose system language is Chinese.
+  await page.evaluate(async () => {
+    await window.localMusicDesktop.setConfig('language', 'en');
+    localStorage.setItem('local-music-language', 'en');
+  });
+  await page.reload();
   await page.getByRole('heading', { name: 'Local library', exact: true }).waitFor();
 };
 const click = locator => locator.evaluate(element => element.click());
@@ -100,7 +109,8 @@ try {
   await page.getByText('Draft saved', { exact: true }).waitFor();
   assert.equal(await page.locator('audio').count(), 1);
   await click(page.getByRole('button', { name: 'Export ▾', exact: true }));
-  await page.getByRole('menuitem', { name: 'Export TTML', exact: true }).click();
+  await click(page.getByRole('menuitem', { name: 'Export line TTML', exact: true }));
+  await click(page.getByRole('button', { name: 'Confirm and download', exact: true }));
   const exported = path.join(downloads, 'Beta.ttml');
   await until(() => access(exported).then(() => true).catch(() => false), 'Native TTML download');
   assert.match(await readFile(exported, 'utf8'), /<tt xmlns=/);

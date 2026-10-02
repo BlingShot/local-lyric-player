@@ -9,6 +9,7 @@ release/
 out/
 build/
 dist-electron/
+desktop/app-mac.png
 
 # Logs
 *.log
