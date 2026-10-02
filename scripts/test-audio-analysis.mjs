@@ -229,7 +229,12 @@ try {
   await put('analysis', [selected.id, 'key'], { ...beforeParameters, settings: { ...beforeParameters.settings, profileType: 'different-test-profile' } });
   await page.reload(); await card('Key').getByText('The audio or analysis parameters changed.', { exact: false }).waitFor();
   const parameterId = await previousTask(selected.id, 'key');
-  await card('Key').getByRole('button', { name: 'Analyze Key', exact: true }).click(); await waitDone(selected.id, ['key'], { key: parameterId });
+  const analyzeKey = card('Key').getByRole('button', { name: 'Analyze Key', exact: true });
+  // A reload restores the main scrollport position. Center this lower card's
+  // action in that scrollport instead of letting nearest-edge scrolling place it
+  // behind the shell's navigation/player bars.
+  await analyzeKey.evaluate(button => button.scrollIntoView({ block: 'center', inline: 'nearest', behavior: 'instant' }));
+  await analyzeKey.click(); await waitDone(selected.id, ['key'], { key: parameterId });
   assert.equal((await recordFor(selected.id, 'key')).settings.profileType, 'bgate');
   assert.ok((await recordFor(selected.id, 'key')).analyzedAt > beforeParameters.analyzedAt);
   assert.equal(await page.evaluate(() => window.__analysisWorkers.started), 1);
