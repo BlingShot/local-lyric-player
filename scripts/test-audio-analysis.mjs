@@ -141,7 +141,22 @@ try {
     // before reopening one, otherwise its leave motion can intercept this click.
     const analyzeMenu = page.getByRole('menuitem', { name: 'Analyze', exact: true });
     await analyzeMenu.waitFor({ state: 'hidden' });
+    // Returning from Studio remounts the panels and schedules their resize/scroll.
+    // Let that layout settle before anchoring a context menu to the sidebar.
+    await page.locator('.Main-section').waitFor();
+    await page.evaluate(async () => {
+      await new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)));
+      const panels = document.querySelector('.offline-panel-group');
+      await Promise.all((panels?.getAnimations({ subtree: true }) ?? [])
+        .filter(animation => Number.isFinite(animation.effect?.getComputedTiming().endTime))
+        .map(animation => animation.finished.catch(() => {})));
+    });
     await page.getByRole('button', { name: `Play saved track ${track.name}`, exact: true }).click({ button: 'right' });
+    await analyzeMenu.waitFor();
+    await analyzeMenu.evaluate(async item => {
+      const popup = item.closest('.app-menu');
+      await Promise.all((popup?.getAnimations({ subtree: true }) ?? []).map(animation => animation.finished.catch(() => {})));
+    });
     await analyzeMenu.click();
     await page.waitForURL(`${origin}/analyze/${encodeURIComponent(track.id)}`);
     await analyzeMenu.waitFor({ state: 'hidden' });
