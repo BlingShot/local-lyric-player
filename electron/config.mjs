@@ -1,7 +1,7 @@
 import { readFile, writeFile, rename, unlink } from 'node:fs/promises';
 import path from 'node:path';
 
-const sections = new Set(['deepseek', 'theme', 'surface', 'language', 'playback', 'lyrics-appearance', 'track-columns', 'normalization', 'import-folder', 'fonts', 'spotify', 'typography', 'audio-output', 'diagnostics']);
+const sections = new Set(['deepseek', 'theme', 'surface', 'language', 'playback', 'lyrics-appearance', 'track-columns', 'normalization', 'import-folder', 'fonts', 'spotify', 'typography', 'audio-output', 'diagnostics', 'lyricflow', 'lyricflow-session']);
 
 // Small preferences only. Music, scan history and per-song projects stay in IndexedDB.
 export class DesktopConfig {
@@ -22,9 +22,9 @@ export class DesktopConfig {
     if (!sections.has(section)) throw new Error('Unknown setting.');
     await this.queue.catch(() => {});
     const value = (await this.load()).settings[section];
-    if (section === 'spotify' && value?.encryptedSession) {
+    if (['spotify', 'lyricflow-session'].includes(section) && value?.encryptedSession) {
       try { return JSON.parse(this.crypto.decryptString(Buffer.from(value.encryptedSession, 'base64'))); }
-      catch { throw new Error('Spotify credentials could not be unlocked. Sign in again.'); }
+      catch { throw new Error('Saved credentials could not be unlocked. Sign in again.'); }
     }
     if (section !== 'deepseek' || !value) return value;
     let apiKey = '';
@@ -40,6 +40,11 @@ export class DesktopConfig {
     const task = this.queue.catch(() => {}).then(async () => {
       const data = await this.load();
       let saved = value;
+      if (section === 'lyricflow-session') {
+        if (!value || JSON.stringify(value).length > 32000) throw new Error('Invalid LyricFlow session.');
+        if (value.refreshToken && (!this.crypto.isEncryptionAvailable() || this.crypto.getSelectedStorageBackend?.() === 'basic_text')) throw new Error('Secure credential encryption is unavailable.');
+        saved = value.refreshToken ? { encryptedSession: this.crypto.encryptString(JSON.stringify(value)).toString('base64') } : {};
+      }
       if (section === 'diagnostics') {
         if (!value || typeof value.debug !== 'boolean' || Object.keys(value).some(key => !['debug', 'level'].includes(key)) ||
             value.level !== undefined && !['debug', 'info', 'warn', 'error', 'fatal'].includes(value.level))

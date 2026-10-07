@@ -64,7 +64,7 @@ try {
   checks.push('TTML absolute Apple/AMLL and standard relative timing, words, background vocals, named duet voices, annotations; unsupported timing/roles/ruby/DTD/malformed XML fail explicitly');
 
   phase = 'startup and database upgrade';
-  const context = await browser.newContext({ viewport: { width: 1600, height: 1000 } });
+  const context = await browser.newContext({ viewport: { width: 1600, height: 1000 }, locale: 'en-US' });
   await context.route('**/*', route => {
     if (new URL(route.request().url()).origin !== origin) { external.push(route.request().url()); return route.abort(); }
     return route.continue();
@@ -112,8 +112,9 @@ try {
   };
   await page.waitForFunction(() => !document.querySelector('.offline-storage-busy'));
   assert.deepEqual(await readStore('playlists'), [{ id: 'old-playlist', name: 'Existing local playlist', trackIds: [] }]);
-  assert.equal(Number(await page.getByRole('slider', { name: 'Volume', exact: true }).inputValue()), .4);
-  checks.push('database version 1 upgrades to version 4 with lyric, analysis and task stores while preserving existing playback settings and playlist records');
+  assert.equal((await readStore('settings')).find(value => value?.volume !== undefined)?.volume, .4);
+  assert.deepEqual(await readStore('lyricflow-links'), []); assert.deepEqual(await readStore('lyricflow-uploads'), []);
+  checks.push('database version 1 upgrades with lyric, analysis and LyricFlow stores while preserving existing playback settings and playlist records');
   await page.getByRole('button', { name: 'Import music', exact: true }).first().click();
   const audioDialog = page.getByRole('dialog', { name: 'Import local music', exact: true });
   await audioDialog.getByLabel('Choose audio files', { exact: true }).setInputFiles([resolve(root, 'one.wav'), resolve(root, 'two.wav')]);

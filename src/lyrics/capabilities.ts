@@ -20,9 +20,9 @@ export function lyricCapabilities(document?: LyricDocument): LyricCapabilities {
   };
 }
 
-export function selectEmbeddedVariant(record: SavedLyrics, format: 'lrc' | 'ttml'): SavedLyrics {
-  if (record.document.format === format) return record;
-  const alternate = record.alternates?.find(variant => variant.document.format === format);
+export function selectEmbeddedVariant(record: SavedLyrics, format: LyricDocument['format'], source?: string): SavedLyrics {
+  if (record.document.format === format && (source === undefined || record.source === source)) return record;
+  const alternate = record.alternates?.find(variant => variant.document.format === format && (source === undefined || variant.source === source));
   if (!alternate) return record;
   const previous = { format: record.document.format, fileName: record.fileName, source: record.source,
     document: record.document, origin: record.origin, offsetMs: record.offsetMs };

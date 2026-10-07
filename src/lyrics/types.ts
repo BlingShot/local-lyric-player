@@ -12,14 +12,14 @@ export interface LyricLine {
   annotations: LyricAnnotation[];
 }
 export interface LyricDocument {
-  format: 'lrc' | 'ttml';
+  format: 'lrc' | 'ttml' | 'lyricflow-json';
   timing: 'line' | 'word' | 'mixed';
   profile?: 'standard' | 'apple';
   lines: LyricLine[];
   agents: Record<string, string>;
   notices: string[];
 }
-export interface EmbeddedLyricVariant { origin?: 'file' | 'embedded' | 'amll'; offsetMs?: number; format: 'lrc' | 'ttml'; fileName: string; source: string; document: LyricDocument }
+export interface EmbeddedLyricVariant { origin?: 'file' | 'embedded' | 'amll' | 'lyricflow'; offsetMs?: number; format: LyricDocument['format']; fileName: string; source: string; document: LyricDocument }
 export interface SavedLyrics {
   revision?: string;
   trackId: string;
@@ -28,7 +28,7 @@ export interface SavedLyrics {
   document: LyricDocument;
   parserVersion: number;
   savedAt: number;
-  origin?: 'file' | 'embedded' | 'amll';
+  origin?: 'file' | 'embedded' | 'amll' | 'lyricflow';
   remote?: { isrc: string; spotifyId: string; authors: string[] };
   offsetMs?: number;
   /** Other embedded formats discovered in the same audio file (LRC/TTML). */

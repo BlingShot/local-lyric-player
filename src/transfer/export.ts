@@ -2,13 +2,14 @@ import { openLibraryDatabase, type TrackRecord, type LocalPlaylist } from '../li
 import type { SavedLyrics } from '../lyrics/types';
 import { TransferSHA256 } from './sha256';
 import { studioRecoveries } from '../studio/repository';
+import { serializeLyrics } from '../lyrics/serialize';
 
 export interface TransferResource { path: string; byteLength: number; sha256: string }
 export interface TransferTrack {
   id: string; title: string; artist: string; album: string; albumArtist: string;
   releaseDate?: string; compilation?: boolean; albumGroup?: string;
   disc: number; number: number; duration: number; fileExtension: string;
-  audio: string; cover?: string; lyrics?: string;
+  audio: string; cover?: string; lyrics?: string; lyricflowSource?: string;
 }
 export interface TransferManifest {
   schemaVersion: 1; appVersion: string; exportedAt: string;
@@ -41,7 +42,8 @@ export async function exportTransfer(destination: FileSystemDirectoryHandle, sig
   const manifest: TransferManifest = {
     schemaVersion: 1, appVersion: 'electron-transfer-1', exportedAt: new Date().toISOString(), resources: [], tracks: [], playlists: [],
     omitted: ['Studio projects, source backups and recovery drafts remain on the source device; iOS does not import them.',
-      'Analysis results/edits, preferences and playback memory are not migrated by this exporter. Credentials are never exported.']
+      'Analysis results/edits, preferences and playback memory are not migrated by this exporter. Credentials are never exported.',
+      'LyricFlow recording links and upload tasks remain on the source device. iOS does not resume contribution tasks.']
   };
   const pending = studioRecoveries().length;
   if (pending) manifest.omitted.push(pending + ' unsaved Studio recovery entries remain on the source device.');
@@ -84,7 +86,16 @@ export async function exportTransfer(destination: FileSystemDirectoryHandle, sig
       const lyric = state.lyrics.get(track.id);
       if (lyric) {
         row.lyrics = 'lyrics/' + key + '.json';
-        const bytes = new Blob([JSON.stringify({ source: lyric.source, fileName: lyric.fileName, offsetMs: lyric.offsetMs || 0 })]);
+        let source = lyric.source, fileName = lyric.fileName;
+        if (lyric.document.format === 'lyricflow-json') {
+          // Existing iOS readers accept TTML/LRC. Keep the exact imported JSON as
+          // an additional manifest resource so the baseline is never discarded.
+          row.lyricflowSource = 'lyrics/' + key + '.lyricflow.json';
+          await write(row.lyricflowSource, new Blob([lyric.source], { type: 'application/json' }));
+          source = serializeLyrics(lyric.document, track.duration || 0, track); fileName = key + '.ttml';
+          manifest.omitted.push('LyricFlow playback converted to TTML for iOS: ' + track.name + '. Blank/note lines, revision provenance and unsupported structure remain in the preserved LyricFlow JSON; unknown ends may be derived in TTML.');
+        }
+        const bytes = new Blob([JSON.stringify({ source, fileName, offsetMs: lyric.offsetMs || 0 })]);
         if (bytes.size > 8 * 1024 * 1024) throw new Error('Lyric resource exceeds budget.');
         await write(row.lyrics, bytes);
         if (lyric.alternates?.length) manifest.omitted.push('Alternate lyric sources remain on source: ' + track.name);

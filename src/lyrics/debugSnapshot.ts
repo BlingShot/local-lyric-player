@@ -21,7 +21,7 @@ export function lyricDebugSnapshot(saved: SavedLyrics | undefined, playbackTime:
     translation: { visible: appearance.showTranslations !== false, annotations: line.annotations.filter(annotation => annotation.kind === 'translation') } });
   const active = document.lines.filter(line => frame.activeIds.has(line.id));
   const gap = !active.length ? [...gaps.get(document)!].find(([, gap]) => time >= gap.start && time < gap.end) : undefined;
-  return { trackId: saved.trackId, source: saved.origin === 'amll' ? 'AMLL TTML' : saved.origin === 'embedded' ? 'Embedded' : document.format === 'ttml' ? 'Local TTML' : 'LRC',
+  return { trackId: saved.trackId, source: document.format === 'lyricflow-json' ? 'LyricFlow' : saved.origin === 'amll' ? 'AMLL TTML' : saved.origin === 'embedded' ? 'Embedded' : document.format === 'ttml' ? 'Local TTML' : 'LRC',
     fileName: saved.fileName, parserVersion: saved.parserVersion, playbackTime, lyricTime: time, offsetMs: saved.offsetMs || 0,
     format: document.format, timing: document.timing, totalLines: document.lines.length, agents: document.agents,
     previous: focus > 0 ? lineInfo(document.lines[focus - 1]) : null, current: focus >= 0 ? lineInfo(document.lines[focus]) : null,

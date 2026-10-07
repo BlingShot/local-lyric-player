@@ -24,6 +24,13 @@ declare global {
       nativeAudioCommand(command: 'play' | 'pause' | 'seek' | 'volume' | 'speed' | 'stop', value: number | undefined, context: NativeCommandContext): Promise<NativeAudioResult>;
       onNativeAudioState(callback: (state: { id: string; time: number; duration: number; paused: boolean; ended: boolean; ready: boolean; error?: PlaybackErrorInfo; exclusive?: boolean }) => void): () => void;
       spotifyInfo(): Promise<{ clientId: string; connected: boolean }>;
+      lyricflowInfo(): Promise<import('../integrations/lyricflow/contributionTypes').LyricFlowConnectionInfo>;
+      lyricflowConfigure(value: import('../integrations/lyricflow/contributionTypes').LyricFlowConfiguration): Promise<import('../integrations/lyricflow/contributionTypes').LyricFlowConnectionInfo>;
+      lyricflowConnect(value: { remember: boolean }): Promise<import('../integrations/lyricflow/contributionTypes').LyricFlowConnectionInfo>;
+      lyricflowDisconnect(): Promise<void>;
+      lyricflowRead(operation: 'resolve' | 'revision' | 'track' | 'contract', input: Record<string, unknown>): Promise<unknown>;
+      lyricflowOperation(operation: import('../integrations/lyricflow/contributionTypes').LyricFlowOperation, input: Record<string, unknown>): Promise<unknown>;
+      lyricflowOpenSite(value?: { trackId?: string }): Promise<void>;
       spotifyLogin(clientId: string): Promise<{ clientId: string; connected: boolean }>;
       spotifyLogout(): Promise<void>;
       spotifyMatch(track: { name: string; artist?: string; duration?: number }): Promise<{ id: string; isrc: string } | null>;

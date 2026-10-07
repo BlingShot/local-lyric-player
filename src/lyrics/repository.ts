@@ -3,6 +3,8 @@ import { lyricRevision, revisedLyrics } from './revision';
 import { openLibraryDatabase } from '../library/database';
 import { LYRICS_PARSER_VERSION, parseLyrics } from './parse';
 import { LyricsError, type SavedLyrics } from './types';
+import type { LocalTrack } from '../library/importFiles';
+import { metadataFingerprint } from '../integrations/lyricflow/repository';
 
 export async function readLyrics(trackId: string): Promise<SavedLyrics | undefined> {
   const db = await openLibraryDatabase();
@@ -17,24 +19,30 @@ export async function readLyrics(trackId: string): Promise<SavedLyrics | undefin
   return record;
 }
 
-export async function saveLyrics(record: SavedLyrics, expected?: string | null) {
+export async function saveLyrics(record: SavedLyrics, expected?: string | null, expectedTrack?: LocalTrack, signal?: AbortSignal) {
   const db = await openLibraryDatabase();
+  signal?.throwIfAborted();
   // Check track membership and save in the same transaction, including concurrent removal.
   await new Promise<void>((resolve, reject) => {
     const tx = db.transaction(['tracks', 'lyrics'], 'readwrite');
     let failure: unknown;
-    tx.oncomplete = () => resolve();
-    tx.onabort = () => reject(failure ?? tx.error ?? new Error('The lyric save was cancelled.'));
+    const abort = () => { failure = signal?.reason; tx.abort(); };
+    signal?.addEventListener('abort', abort, { once: true });
+    tx.oncomplete = () => { signal?.removeEventListener('abort', abort); resolve(); };
+    tx.onabort = () => { signal?.removeEventListener('abort', abort); reject(failure ?? tx.error ?? new Error('The lyric save was cancelled.')); };
     tx.onerror = () => {};
-    const request = tx.objectStore('tracks').getKey(record.trackId);
+    const request = tx.objectStore('tracks').get(record.trackId);
     request.onsuccess = () => {
       if (request.result === undefined) { failure = new LyricsError('This track was removed. Select another track before importing lyrics.'); tx.abort(); return; }
       try {
+        signal?.throwIfAborted();
+        if (expectedTrack && (request.result.audioRevision !== expectedTrack.audioRevision || request.result.metadataRevision !== expectedTrack.metadataRevision || metadataFingerprint(request.result) !== metadataFingerprint(expectedTrack))) throw new LyricsError('This song changed while lyrics were downloading. The newer data was kept.');
         if (expected !== undefined) {
           const current = tx.objectStore('lyrics').get(record.trackId);
           current.onsuccess = () => {
             try {
               if (lyricRevision(current.result) !== expected) throw new Error('Lyrics changed while downloading. The newer lyrics were kept.');
+              signal?.throwIfAborted();
               tx.objectStore('lyrics').put(revisedLyrics(record), record.trackId);
             } catch (error) { failure = error; tx.abort(); }
           };
@@ -76,11 +84,11 @@ export async function saveLyricOffset(trackId: string, offsetMs: number, savedAt
 }
 
 /** Switching the stored primary keeps every lyric surface on the same source. */
-export async function switchLyricFormat(trackId: string, format: 'lrc' | 'ttml') {
+export async function switchLyricFormat(trackId: string, format: SavedLyrics['document']['format'], source?: string) {
   const before = await readLyrics(trackId);
   if (!before) throw new LyricsError('This track has no saved lyrics.');
-  const selected = selectEmbeddedVariant(before, format);
-  if (selected.document.format !== format) throw new LyricsError('This lyric format is not available for this song.');
+  const selected = selectEmbeddedVariant(before, format, source);
+  if (selected.document.format !== format || source !== undefined && selected.source !== source) throw new LyricsError('This lyric format is not available for this song.');
   if (selected === before) return;
   await saveLyrics({ ...selected, savedAt: Date.now() }, lyricRevision(before));
 }

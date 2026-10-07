@@ -28,6 +28,8 @@ import { newProject, parseProject, shiftProject, STRUCTURES, uid, vocalLine, typ
 import { importProjectTtml } from '../../studio/projectImport';
 import { exportName, exportProjectLrc, exportProjectTtml, type LrcPolicy } from '../../studio/projectExport';
 import { lineBounds, validateProject, type ProjectIssue, type TtmlMode } from '../../studio/validation';
+import { LyricFlowSubmit } from './LyricFlowSubmit';
+import { parseLyricFlowSource, revisionToStudioProject } from '../../integrations/lyricflow/adapter';
 
 type ExportFormat = 'word' | 'line' | 'lrc' | 'both';
 interface Download { name: string; url: string }
@@ -48,6 +50,7 @@ export function StudioWorkspace({ trackId, changeTrack, seed, preferDraft = fals
   const [target, setTarget] = useState<'player' | 'amll'>('player'), [lrcPolicy, setLrcPolicy] = useState<LrcPolicy>({ voices: 'lead', annotations: 'omit' });
   const [shiftOpen, setShiftOpen] = useState(false), [shift, setShift] = useState('0'), [scope, setScope] = useState<'all' | 'line' | 'word'>('all');
   const [loop, setLoop] = useState(false);
+  const [lyricflowOpen, setLyricflowOpen] = useState(false);
   const [surface, setSurface] = useState<'lrc' | 'ttml'>('lrc');
   const timingMode = surface === 'lrc' ? 'line' : draft?.settings.mode || 'line';
   const region = useRef<HTMLDivElement>(null), audioInput = useRef<HTMLInputElement>(null), lyricInput = useRef<HTMLInputElement>(null), projectInput = useRef<HTMLInputElement>(null), urls = useRef<string[]>([]);
@@ -56,7 +59,7 @@ export function StudioWorkspace({ trackId, changeTrack, seed, preferDraft = fals
     released.forEach(url => URL.revokeObjectURL(url));
     urls.current = urls.current.filter(url => !released.has(url)); setDownloads([]);
   };
-  const recording = useWordRecording(edit, canUseAudio, paste || !!preview || !!exportOpen || !!downloads.length || infoOpen || shiftOpen, setMessage, timingMode);
+  const recording = useWordRecording(edit, canUseAudio, paste || !!preview || !!exportOpen || !!downloads.length || infoOpen || shiftOpen || lyricflowOpen, setMessage, timingMode);
   useEffect(() => () => urls.current.forEach(url => URL.revokeObjectURL(url)), []);
   useEffect(() => { if (track && !track.unavailable && getLocalPlayer().getState().currentId !== track.id) { playLocalTrack(track.id); getLocalPlayer().pause(); } }, [track?.id, track?.unavailable]);
   useEffect(() => {
@@ -64,9 +67,9 @@ export function StudioWorkspace({ trackId, changeTrack, seed, preferDraft = fals
     if (!draft.metadataInitialized && !draft.metadata.title && !draft.metadata.artist && !draft.metadata.album && !edit.canUndo) commit(p => ({ ...p, metadataInitialized: true, metadata: { ...p.metadata, title: track.name || '', artist: track.artist || '', album: track.album || '' } }));
   }, [draft, track]);
   const importSaved = (saved: NonNullable<typeof savedLyrics.saved>) => {
-    const p = saved.document.format === 'ttml' ? importProjectTtml(saved.source, trackId, saved.fileName) : importProjectLrc(saved.source, trackId, audioName);
+    const p = saved.document.format === 'lyricflow-json' ? revisionToStudioProject(parseLyricFlowSource(saved.source), trackId, audioName) : saved.document.format === 'ttml' ? importProjectTtml(saved.source, trackId, saved.fileName) : importProjectLrc(saved.source, trackId, audioName);
     const shifted = saved.offsetMs ? shiftProject(p, saved.offsetMs, 'all') : p;
-    return { ...shifted, settings: { ...shifted.settings, mode: saved.document.timing === 'line' ? 'line' as const : 'word' as const } };
+    return { ...shifted, ...(shifted.lyricflow && saved.offsetMs ? { lyricflow: { ...shifted.lyricflow, timeBasis: 'user-offset-applied' as const } } : {}), settings: { ...shifted.settings, mode: saved.document.timing === 'line' ? 'line' as const : 'word' as const } };
   };
   useEffect(() => {
     const current = edit.current.current;
@@ -77,7 +80,7 @@ export function StudioWorkspace({ trackId, changeTrack, seed, preferDraft = fals
     void (async () => {
       const key = await playerLyricKey(saved);
       if (cancelled) return;
-      if (current.playerSource?.key === key) { autoImport.current = true; setSurface(saved.document.format); return; }
+      if (current.playerSource?.key === key) { autoImport.current = true; setSurface(saved.document.format === 'lyricflow-json' ? 'lrc' : saved.document.format); return; }
       // Do not race typing, sync recording or an explicitly restored/imported draft.
       if (edit.current.current?.updatedAt !== current.updatedAt) return;
       const imported = importSaved(saved);
@@ -86,7 +89,7 @@ export function StudioWorkspace({ trackId, changeTrack, seed, preferDraft = fals
       if (meaningful) { await backupStudioSource(current); backups = await studioSourceBackups(trackId); }
       if (cancelled || edit.current.current?.updatedAt !== current.updatedAt) return;
       autoImport.current = true;
-      setSurface(saved.document.format);
+      setSurface(saved.document.format === 'lyricflow-json' ? 'lrc' : saved.document.format);
       commit(previous => ({ ...imported, audioName, metadataInitialized: true,
         playerSource: { key, format: saved.document.format },
         metadata: { ...previous.metadata, ...imported.metadata, title: imported.metadata.title || previous.metadata.title || track.name,
@@ -168,7 +171,7 @@ export function StudioWorkspace({ trackId, changeTrack, seed, preferDraft = fals
   return <div className='offline-app studio-page' data-local-file-drop data-studio-format={surface} onDragOver={e => { e.preventDefault(); e.stopPropagation(); }} onDrop={e => { e.preventDefault(); e.stopPropagation(); const file = e.dataTransfer.files[0]; if (file) /\.(ttml|amll|lrc|json)$/i.test(file.name) ? void importFile(file) : void chooseAudio(file); }}>
     <header className='studio-header'><div className='studio-brand'><AppMenu /><div className='studio-heading'><h1>{t("Lyric Studio")}</h1></div></div>
       <div className='studio-song' aria-label={t("Studio song")}>{track ? <><img src={trackCover(track)} alt='' /><div><strong>{track.name}</strong><span>{track.artist || t("Local audio")}</span></div><button className='studio-song-info' onClick={() => setInfoOpen(true)} aria-label={t("Track info")}>ⓘ</button></> : <button onClick={() => audioInput.current?.click()}>{t("Choose audio")}</button>}</div>
-      <div className='studio-header-actions'><button onClick={() => store.dispatch(uiActions.setSettingsOpen(true))}>{t('Settings')}</button><Link to='/'>{t("Back to player")}</Link><AppDropdown trigger={['click']} menu={{ items: [{ key: 'lrc', label: t("Write LRC to song copy") }, { key: 'word', label: t("Write word TTML to song copy") }, { key: 'line', label: t("Write line TTML to song copy") }], onClick: ({ key }) => { setWriteCopy(true); void exportFiles(key as ExportFormat); } }}><button title={t("Save lyrics inside the library audio copy")} disabled={!draft || busy || !track || track.unavailable}>{t("Write to song ▾")}</button></AppDropdown><AppDropdown trigger={['click']} menu={{ items: [{ key: 'word', label: t("Export word TTML") }, { key: 'line', label: t("Export line TTML") }, { key: 'lrc', label: t("Export LRC") }, { key: 'both', label: t("Export both") }], onClick: ({ key }) => { setWriteCopy(false); void exportFiles(key as ExportFormat); } }}><button className='white-button' disabled={!draft || busy}>{t("Export ▾")}</button></AppDropdown></div>
+      <div className='studio-header-actions'><button title={t('LyricFlow contributions are available in the desktop app. Public lyrics need no account.')} disabled={!draft || !track || busy || !!edit.error || !window.localMusicDesktop?.lyricflowOperation} onClick={() => { recording.cancel(); setLyricflowOpen(true); }}>{t('Submit to LyricFlow')}</button><button onClick={() => store.dispatch(uiActions.setSettingsOpen(true))}>{t('Settings')}</button><Link to='/'>{t("Back to player")}</Link><AppDropdown trigger={['click']} menu={{ items: [{ key: 'lrc', label: t("Write LRC to song copy") }, { key: 'word', label: t("Write word TTML to song copy") }, { key: 'line', label: t("Write line TTML to song copy") }], onClick: ({ key }) => { setWriteCopy(true); void exportFiles(key as ExportFormat); } }}><button title={t("Save lyrics inside the library audio copy")} disabled={!draft || busy || !track || track.unavailable}>{t("Write to song ▾")}</button></AppDropdown><AppDropdown trigger={['click']} menu={{ items: [{ key: 'word', label: t("Export word TTML") }, { key: 'line', label: t("Export line TTML") }, { key: 'lrc', label: t("Export LRC") }, { key: 'both', label: t("Export both") }], onClick: ({ key }) => { setWriteCopy(false); void exportFiles(key as ExportFormat); } }}><button className='white-button' disabled={!draft || busy}>{t("Export ▾")}</button></AppDropdown></div>
       <input hidden type='file' ref={audioInput} accept={AUDIO_ACCEPT} aria-label={t("Choose studio audio")} onChange={e => { void chooseAudio(e.target.files?.[0]); e.target.value = ''; }} />
       <input hidden type='file' ref={lyricInput} accept='.lrc,.ttml,.amll' aria-label={t("Choose studio lyrics")} onChange={e => { void importFile(e.target.files?.[0]); e.target.value = ''; }} />
       <input hidden type='file' ref={projectInput} accept='.json' aria-label={t("Choose studio project")} onChange={e => { void importFile(e.target.files?.[0]); e.target.value = ''; }} />
@@ -181,7 +184,7 @@ export function StudioWorkspace({ trackId, changeTrack, seed, preferDraft = fals
       <div className='studio-tools'><div><button disabled={!draft} onClick={() => setPaste(true)}>{t("Paste lyrics")}</button><button disabled={!draft} onClick={() => lyricInput.current?.click()}>{t("Import LRC / TTML")}</button>
         <button disabled={!draft} onClick={() => audioInput.current?.click()}>{t("Choose audio")}</button>
         <AppDropdown trigger={['click']} menu={{ items: [{ key: 'load', label: t("Load song lyrics"), disabled: !track }, { key: 'save', label: t("Save project file") }, { key: 'restore', label: t("Restore project") }, { key: 'backups', label: t('Previous drafts'), disabled: !sourceBackups.length, children: sourceBackups.map((backup, index) => ({ key: `backup:${index}`, label: `${new Date(backup.project.updatedAt).toLocaleString()} · ${backup.project.source?.fileName || backup.project.audioName}` })) }, { type: 'divider' }, { key: 'clear', label: t("Clear project"), danger: true }], onClick: async ({ key }) => {
-          if (key === 'load') { try { const saved = await readLyrics(trackId); if (saved) { setPreview(importSaved(saved)); setSurface(saved.document.format); } else setMessage('No saved song lyrics.'); } catch (e) { setMessage((e as Error).message); } }
+          if (key === 'load') { try { const saved = await readLyrics(trackId); if (saved) { setPreview(importSaved(saved)); setSurface(saved.document.format === 'lyricflow-json' ? 'lrc' : saved.document.format); } else setMessage('No saved song lyrics.'); } catch (e) { setMessage((e as Error).message); } }
           if (key === 'save' && draft) download(makeFile(`${exportName(audioName || draft.audioName)}.lyric-studio.json`, JSON.stringify(draft, null, 2), 'application/json;charset=utf-8'));
           if (key === 'restore') projectInput.current?.click();
           if (key.startsWith('backup:')) { const backup = sourceBackups[Number(key.slice(7))]; if (backup) { setPreview(backup.project); setSurface(studioSourceFormat(backup.project)); } }
@@ -224,6 +227,7 @@ export function StudioWorkspace({ trackId, changeTrack, seed, preferDraft = fals
       {draft ? <>{surface === 'ttml' && <StudioInspector project={draft} commit={commit} selectedIds={selectedIds} />}<div className='studio-editor-layout'><StudioProjectRows recordingWordIds={recording.activeWordIds} syncTarget={recording.syncTarget} clearSyncTarget={recording.clearSyncTarget} advanced={surface === 'ttml'} draft={draft} duration={duration} issues={issues} commit={commit} select={select} listen={listen} canListen={canUseAudio} region={region} onError={setMessage} selectedIds={selectedIds} setSelectedIds={setSelectedIds} />{surface === 'ttml' && draft.settings.preview && <StudioLivePreview syncTarget={recording.syncTarget} recordingWordIds={recording.activeWordIds} project={draft} durationMs={Math.round(duration * 1000)} enabled={canUseAudio} />}</div></> : <div className='studio-empty'>{t("Loading your draft…")}</div>}
     </main>
     <StudioTransport trackId={trackId} />
+    {lyricflowOpen && draft && track && <LyricFlowSubmit project={draft} track={track} durationMs={duration > 0 ? Math.round(duration * 1000) : track.duration ? Math.round(track.duration * 1000) : null} onClose={() => setLyricflowOpen(false)} />}
     {infoOpen && track && <TrackInfo track={track} close={() => setInfoOpen(false)} chooseAudio={() => { setInfoOpen(false); audioInput.current?.click(); }} />}
     {paste && <StudioPaste close={() => setPaste(false)} apply={(rows, append) => {
       commit(p => { const lines: StudioProject['lines'] = [], sections: Section[] = []; let current: Section | undefined;

@@ -21,13 +21,13 @@ export function validTrackColumns(value?: Partial<TrackColumns>): TrackColumns {
 export interface SavedTrack { track: TrackRecord; audio?: Blob; cover?: Blob; lyrics?: SavedLyrics }
 
 export const DATABASE_NAME = 'local-music-library';
-const stores = ['tracks', 'audio', 'covers', 'settings', 'playlists', 'lyrics', 'analysis', 'analysis-edits', 'analysis-tasks'] as const;
+const stores = ['tracks', 'audio', 'covers', 'settings', 'playlists', 'lyrics', 'analysis', 'analysis-edits', 'analysis-tasks', 'lyricflow-links', 'lyricflow-uploads'] as const;
 let connection: Promise<IDBDatabase> | undefined;
 
 export function openLibraryDatabase(): Promise<IDBDatabase> {
   if (connection) return connection;
   connection = new Promise<IDBDatabase>((resolve, reject) => {
-    const request = indexedDB.open(DATABASE_NAME, 6);
+    const request = indexedDB.open(DATABASE_NAME, 7);
     let blocked = false;
     request.onupgradeneeded = () => {
       for (const name of stores) {
@@ -189,12 +189,16 @@ export async function patchExistingTracks(items: readonly TrackMutation[]): Prom
 
 export async function deleteTrack(id: string) {
   const db = await openLibraryDatabase();
-  const tx = db.transaction(['tracks', 'audio', 'covers', 'playlists', 'lyrics', 'analysis', 'analysis-edits', 'analysis-tasks'], 'readwrite');
+  const tx = db.transaction(['tracks', 'audio', 'covers', 'playlists', 'lyrics', 'analysis', 'analysis-edits', 'analysis-tasks', 'lyricflow-links', 'lyricflow-uploads'], 'readwrite');
   const done = completed(tx);
   for (const name of ['tracks', 'audio', 'covers', 'lyrics']) tx.objectStore(name).delete(id);
   tx.objectStore('analysis').delete(IDBKeyRange.bound([id], [id, []]));
   tx.objectStore('analysis-edits').delete(id);
   tx.objectStore('analysis-tasks').delete(IDBKeyRange.bound([id], [id, []]));
+  for (const name of ['lyricflow-links', 'lyricflow-uploads']) {
+    const lookup = tx.objectStore(name).openCursor();
+    lookup.onsuccess = () => { const cursor = lookup.result; if (!cursor) return; if (cursor.value.localTrackId === id) cursor.delete(); cursor.continue(); };
+  }
   const request = tx.objectStore('playlists').openCursor();
   request.onsuccess = () => {
     const cursor = request.result;

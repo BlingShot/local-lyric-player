@@ -43,6 +43,9 @@ export function EmbeddedLyricSwitch({ saved }: { saved: SavedLyrics }) {
         aria-pressed={saved.document.format === format}
         title={formats.has(format) ? t('Switch lyric source') : t('Read embedded lyrics to discover this format')}
         onClick={() => void run(() => switchLyricFormat(saved.trackId, format))}>{format.toUpperCase()}</button>)}
+      {[saved, ...(saved.alternates ?? [])].filter(variant => variant.document.format === 'lyricflow-json').map(variant => <button key={variant.source} disabled={busy}
+        aria-pressed={saved.source === variant.source} title={variant.fileName}
+        onClick={() => void run(() => switchLyricFormat(saved.trackId, 'lyricflow-json', variant.source))}>LyricFlow · {variant.fileName.replace(/\.lyricflow\.json$/i, '').slice(0, 8)}</button>)}
     </div>
     {formats.size < 2 && <button className='embedded-source-refresh' disabled={busy} onClick={() => void run(async () => {
       const count = await discoverEmbeddedLyricVariants(saved.trackId);

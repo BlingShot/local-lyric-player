@@ -1,5 +1,6 @@
 import { parseStudioTime, studioTime, type StudioDraft } from './model.ts';
 import type { LyricDocument } from '../lyrics/types.ts';
+import type { LyricFlowRevision } from '../integrations/lyricflow/types.ts';
 
 export type Millis = number | null;
 export interface Unit { id: string; text: string; kind: 'word' | 'separator'; startMs: Millis; endMs: Millis; performerId?: string }
@@ -13,7 +14,8 @@ export interface StudioProject {
   lines: VocalLine[]; performers: Performer[]; sections: Section[];
   metadata: { title: string; artist: string; album: string; language: string; extra: Record<string, string[]> };
   metadataInitialized?: boolean;
-  playerSource?: { key: string; format: 'lrc' | 'ttml' };
+  playerSource?: { key: string; format: 'lrc' | 'ttml' | 'lyricflow-json' };
+  lyricflow?: { apiOrigin: string; trackId: string; documentId: string; revisionId: string; baseSnapshot: LyricFlowRevision; lineMap: Record<string, string>; timeBasis: 'recording' | 'user-offset-applied' };
   boundaries?: { startMs: Millis; endMs: Millis };
   settings: { mode: 'line' | 'word'; split: SplitMode; preRollMs: number; preview: boolean; colors: boolean; alignment: boolean; wordArrowKeys?: boolean };
   source?: { text: string; fileName: string; notices: string[] };
@@ -138,7 +140,10 @@ export function fromPreview(document: LyricDocument, trackId: string, audioName:
 export function parseProject(source: string): StudioProject {
   if (source.length > 8_000_000) throw new Error('Project exceeds 8 MB.');
   const p = JSON.parse(source);
-  if (p?.playerSource !== undefined && (!p.playerSource || typeof p.playerSource.key !== 'string' || !/^[a-f0-9]{64}$/.test(p.playerSource.key) || !['lrc', 'ttml'].includes(p.playerSource.format))) throw new Error('Invalid player lyric source.');
+  if (p?.playerSource !== undefined && (!p.playerSource || typeof p.playerSource.key !== 'string' || !/^[a-f0-9]{64}$/.test(p.playerSource.key) || !['lrc', 'ttml', 'lyricflow-json'].includes(p.playerSource.format))) throw new Error('Invalid player lyric source.');
+  if (p?.lyricflow !== undefined && (!p.lyricflow || !['apiOrigin', 'trackId', 'documentId', 'revisionId'].every(k => typeof p.lyricflow[k] === 'string') ||
+      !['recording', 'user-offset-applied'].includes(p.lyricflow.timeBasis) || !p.lyricflow.lineMap || typeof p.lyricflow.lineMap !== 'object' || Array.isArray(p.lyricflow.lineMap) ||
+      !Object.values(p.lyricflow.lineMap).every(v => typeof v === 'string') || p.lyricflow.baseSnapshot?.id !== p.lyricflow.revisionId || p.lyricflow.baseSnapshot?.documentId !== p.lyricflow.documentId || p.lyricflow.baseSnapshot?.content?.schemaVersion !== 1)) throw new Error('Invalid LyricFlow project baseline.');
   const time = (t: unknown) => t === null || Number.isSafeInteger(t);
   if (p?.version !== 2 || typeof p.trackId !== 'string' || typeof p.audioName !== 'string' || typeof p.selectedId !== 'string' || !Number.isFinite(p.updatedAt)
     || !Array.isArray(p.lines) || p.lines.length > 5000 || !Array.isArray(p.performers) || !Array.isArray(p.sections)

@@ -1,0 +1,18 @@
+.lyricflow-submit, .lyricflow-connection, .lyricflow-settings { overflow-wrap: anywhere; }
+.lyricflow-submit button, .lyricflow-connection button, .lyricflow-settings > button {
+  margin: 5px 8px 5px 0; padding: 8px 12px; border: 1px solid color-mix(in srgb, currentColor 25%, transparent); border-radius: 6px;
+  background: color-mix(in srgb, currentColor 5%, transparent); color: inherit; font: inherit; cursor: pointer;
+}
+.lyricflow-submit button:disabled, .lyricflow-connection button:disabled, .lyricflow-settings button:disabled { opacity: .45; cursor: default; }
+.lyricflow-submit :is(button, select, textarea, input, summary):focus-visible, .lyricflow-connection :is(button, input, summary):focus-visible { outline: 2px solid #1ed760; outline-offset: 3px; }
+.lyricflow-submit label, .lyricflow-connection label, .lyricflow-settings > label { display: block; margin-block: 12px; }
+.lyricflow-submit :is(select, textarea), .lyricflow-connection input:not([type=checkbox]), .lyricflow-settings > label > input:not([type=checkbox]) {
+  display: block; width: 100%; padding: 8px; margin-block: 5px; border: 1px solid color-mix(in srgb, currentColor 30%, transparent); border-radius: 5px; font: inherit;
+  background: transparent; color: inherit;
+}
+.lyricflow-submit input[type=checkbox], .lyricflow-connection input[type=checkbox], .lyricflow-settings input[type=checkbox] { margin-inline-end: 8px; }
+.lyricflow-submit th, .lyricflow-submit td { padding: 8px 6px; border-bottom: 1px solid color-mix(in srgb, currentColor 15%, transparent); vertical-align: top; }
+.lyricflow-submit ol { display: flex; flex-wrap: wrap; gap: 12px 30px; padding-inline-start: 20px; margin-block: 20px; opacity: .8; }
+.lyricflow-submit [aria-current=step] { font-weight: 700; }
+.lyricflow-submit [role=alert], .lyricflow-connection [role=alert] { padding: 10px; border-left: 3px solid #e99a47; }
+.lyricflow-submit summary, .lyricflow-connection summary { cursor: pointer; margin-block: 12px; }

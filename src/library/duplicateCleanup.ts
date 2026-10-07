@@ -53,7 +53,7 @@ export async function mergeDuplicateRecords(preview: readonly TrackRecord[], kee
   }
   const db = await openLibraryDatabase();
   return new Promise<{ kept: TrackRecord; removedIds: string[]; playlists: LocalPlaylist[] }>((resolve, reject) => {
-    const tx = db.transaction(['tracks', 'settings', 'playlists'], 'readwrite');
+    const tx = db.transaction(['tracks', 'settings', 'playlists', 'lyricflow-links', 'lyricflow-uploads'], 'readwrite');
     let failure: unknown, result: { kept: TrackRecord; removedIds: string[]; playlists: LocalPlaylist[] };
     const current = new Map<string, TrackRecord>();
     let playlists: LocalPlaylist[] = [], settingKeys: IDBValidKey[] = [], pending = preview.length + 2;
@@ -86,9 +86,13 @@ export async function mergeDuplicateRecords(preview: readonly TrackRecord[], kee
         tx.objectStore('settings').add(backup, backup.key);
         tx.objectStore('tracks').put(kept, keepId);
         for (const id of removedIds) tx.objectStore('tracks').delete(id);
+        const uploads = tx.objectStore('lyricflow-uploads').openCursor();
+        uploads.onsuccess = () => { const cursor = uploads.result; if (!cursor) return; if (removed.has(cursor.value.localTrackId)) cursor.update({ ...cursor.value, paused: true }); cursor.continue(); };
         for (const playlist of backup.after) tx.objectStore('playlists').put(playlist, playlist.id);
         // Audio, lyrics, artwork, analyses and Studio data remain keyed by the
-        // original IDs. Undo restores those entries without reconstructing files.
+        // original IDs. LyricFlow links also keep their original IDs: two different
+        // remote recordings must never be merged implicitly. Upload tasks stay
+        // paused after undo and need their normal identity/context checks to resume.
         result = { kept, removedIds, playlists: updated };
       } catch (error) { failure = error; tx.abort(); }
     };

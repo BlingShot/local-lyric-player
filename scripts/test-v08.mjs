@@ -38,6 +38,7 @@ try {
     assert.equal(url.searchParams.get('id'), String(entry.id));
     return route.fulfill({ json: { status: 200, data: { ...entry, format: 'ttml', lyrics: fixture } } });
   });
+  await page.route('https://raw.githubusercontent.com/amll-dev/amll-ttml-db/**', route => route.fulfill({ contentType: 'text/plain', body: '' }));
   await page.goto('http://127.0.0.1:3018/lyrics');
   const audio = taggedWav({ TIT2: '瞬', TPE1: '郑润泽', TALB: '瞬' }, [], '[00:30]Local fallback\n[00:55]', 60).toString('base64');
   await page.evaluate(async base64 => {
@@ -46,12 +47,24 @@ try {
     runtime.getLocalPlayer().setVolume(0); runtime.playLocalTrack(store.getState().library.tracks[0].id); await runtime.getLocalAudioElement().play(); runtime.getLocalPlayer().pause();
   }, audio);
   await page.waitForFunction(() => document.querySelector('audio')?.duration === 60);
+  phase = 'selected local source';
+  await page.evaluate(() => window.dispatchEvent(new Event('spotify-session-updated')));
+  await page.waitForTimeout(100);
+  assert.equal(urls.length, 0); assert.ok(await page.getByText('Local fallback', { exact: true }).count());
+  checks.push('Selected local LRC prevents automatic AMLL queries and replacement.');
+  // Clear only this isolated fixture's lyrics to exercise the missing-source path.
+  await page.evaluate(async () => {
+    const { openLibraryDatabase } = await import('/src/library/database.ts'), { store } = await import('/src/store/store.ts');
+    const id = store.getState().player.currentId, db = await openLibraryDatabase();
+    await new Promise((resolve, reject) => { const tx = db.transaction('lyrics', 'readwrite'); tx.objectStore('lyrics').delete(id); tx.oncomplete = resolve; tx.onabort = () => reject(tx.error); });
+    window.dispatchEvent(new CustomEvent('local-lyrics-updated', { detail: id }));
+  });
   phase = 'three-second status';
   await page.evaluate(() => window.dispatchEvent(new Event('spotify-session-updated')));
   const notice = page.getByText('AMLL has no matching TTML. Using local lyrics.', { exact: false });
   await notice.waitFor(); await page.waitForTimeout(1000); assert.ok(await notice.count());
-  await notice.waitFor({ state: 'hidden', timeout: 4000 }); assert.ok(await page.getByText('Local fallback', { exact: true }).count());
-  checks.push('Missing AMLL notice disappears after 3 seconds; local lyrics remain.');
+  await notice.waitFor({ state: 'hidden', timeout: 4000 });
+  checks.push('Missing AMLL notice disappears after 3 seconds without inventing lyrics.');
   phase = 'metadata fallback'; mode = 'found';
   console.log('Parsed fixture', await page.evaluate(async source => { const { parseLyrics } = await import('/src/lyrics/parse.ts'); return parseLyrics(source, 'fixture.ttml').lines.length; }, fixture));
   if (process.env.AMLL_LIVE_TEST === '1') {

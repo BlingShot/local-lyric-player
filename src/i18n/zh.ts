@@ -1,4 +1,6 @@
 import { zh08 } from './zh08';
+import { zhLyricFlowRead } from './zhLyricFlowRead';
+import { zhLyricFlow } from './zhLyricFlow';
 ﻿// English source keys keep existing projects, metadata and lyrics independent of UI language.
 const pairs = `
 Spotify / AMLL lyrics|Spotify / AMLL 歌词
@@ -800,3 +802,5 @@ Logs are recorded at the selected level and above. Debug data is shown directly 
 export const zh: Record<string, string> = Object.fromEntries(pairs.trim().split('\n').map(line => { const at = line.indexOf('|'); return [line.slice(0, at), line.slice(at + 1)]; }));
 
 Object.assign(zh, zh08);
+Object.assign(zh, zhLyricFlowRead);
+Object.assign(zh, zhLyricFlow);

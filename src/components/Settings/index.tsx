@@ -14,6 +14,7 @@ import { AutoImportFolder } from './AutoImportFolder';
 import { NormalizationSettings } from './Normalization';
 import { DeepSeekSettings } from './DeepSeek';
 import { SpotifySettings } from './Spotify';
+import { LyricFlowSettings } from './LyricFlow';
 import { DesktopStorageSettings } from './DesktopStorage';
 import { DuplicateTracksSettings } from './DuplicateTracks';
 import { DiagnosticsSettings } from './Diagnostics';
@@ -57,7 +58,7 @@ function SettingsContent() {
       <section><h3>{t('Lyrics timing')}</h3><p>{track?.name || t('No track selected')}</p>{saved ? <LyricsTimingControls offsetMs={timing.offsetMs} onChange={value => void timing.update(value)} /> : <p>{t('Select a song with saved or embedded lyrics to adjust its timing.')}</p>}{timing.error && <p role='alert'>{t(timing.error)}</p>}</section>
     </div>
     <div hidden={tab !== 'Playback'} className='settings-category'><header><h2>{t('Playback')}</h2></header><section><h3>{t('Volume')}</h3><VolumeControl /></section><AudioOutputSettings active={tab === 'Playback'} /><NormalizationSettings /><ListeningTimeSettings /></div>
-    <div hidden={tab !== 'Online services'} className='settings-category'><header><h2>{t('Online services')}</h2></header><SpotifySettings /><DeepSeekSettings /></div>
+    <div hidden={tab !== 'Online services'} className='settings-category'><header><h2>{t('Online services')}</h2></header><LyricFlowSettings /><SpotifySettings /><DeepSeekSettings /></div>
     <div hidden={tab !== 'Storage'} className='settings-category'><header><h2>{t('Storage')}</h2></header><TransferSettings /><AutoImportFolder /><DuplicateTracksSettings /><DesktopStorageSettings /></div>
     <div hidden={tab !== 'Advanced'} className='settings-category'><header><h2>{t('Advanced')}</h2></header><DiagnosticsSettings /></div>
   </div></div>;
